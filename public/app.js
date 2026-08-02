@@ -1,5 +1,5 @@
 'use strict';
-// 前端逻辑：认证、查询、渲染、明细、导出
+// 前端逻辑：认证、查询、渲染、明细、导出、回填
 
 // ===== 认证 =====
 const TOKEN_KEY = 'am_token';
@@ -15,7 +15,6 @@ function redirectToLogin() {
   window.location.href = '/login.html';
 }
 
-// 带认证的 fetch 封装，自动添加 Authorization 头，401 时跳转登录
 async function authFetch(url, options) {
   const token = getToken();
   if (!token) {
@@ -34,12 +33,10 @@ async function authFetch(url, options) {
   return res;
 }
 
-// 页面加载时检查登录状态
 if (!getToken()) {
   redirectToLogin();
 }
 
-// 显示用户名
 const currentUser = localStorage.getItem(USER_KEY);
 if (currentUser) {
   document.getElementById('userBadge').textContent = `👤 ${currentUser}`;
@@ -55,7 +52,7 @@ const levelText = { red: '预警', blue: '正常', green: '活跃' };
 // ===== 汇总数据 =====
 async function loadSummary() {
   const body = $('summaryBody');
-  body.innerHTML = '<tr><td colspan="10" class="empty">加载中...</td></tr>';
+  body.innerHTML = '<tr><td colspan="13" class="empty">加载中...</td></tr>';
   let url = '/api/summary?';
   if (useCustom) {
     url += `start=${$('startDate').value}&end=${$('endDate').value}`;
@@ -72,36 +69,38 @@ async function loadSummary() {
     $('rangeLabel').textContent = `（${json.range.start} 至 ${json.range.end}）`;
     $('totalCount').textContent = `共 ${json.count} 人`;
     if (!json.data.length) {
-      body.innerHTML = '<tr><td colspan="10" class="empty">暂无数据</td></tr>';
+      body.innerHTML = '<tr><td colspan="13" class="empty">暂无数据</td></tr>';
       return;
     }
     body.innerHTML = json.data.map((r) => `
       <tr class="row-${r.level}" data-label="${r.label}">
         <td><strong>${r.label}</strong></td>
         <td class="num">${r.raw_hours}</td>
+        <td class="num">${r.new_task_hours}</td>
+        <td class="num">${r.old_task_hours}</td>
         <td class="num">${r.segment_hours}</td>
         <td class="num">${r.no_clip_hours}</td>
         <td class="num">${r.no_clip_equivalent_hours}</td>
         <td class="num">${r.settlement_reference_hours}</td>
+        <td class="num">${r.pass_ratio}%</td>
         <td class="num">${r.cumulative_reference_hours}</td>
         <td class="num"><strong>${r.daily_avg_raw_hours}</strong></td>
         <td class="num">${r.active_days}</td>
         <td><span class="badge ${r.level}">${levelText[r.level]}</span></td>
       </tr>
     `).join('');
-    // 绑定点击事件
     body.querySelectorAll('tr[data-label]').forEach((tr) => {
       tr.addEventListener('click', () => openDetail(tr.dataset.label));
     });
   } catch (e) {
-    body.innerHTML = `<tr><td colspan="10" class="empty">加载失败: ${e.message}</td></tr>`;
+    body.innerHTML = `<tr><td colspan="13" class="empty">加载失败: ${e.message}</td></tr>`;
   }
 }
 
 // ===== 明细 =====
 async function openDetail(label) {
   $('detailTitle').textContent = `${label} 每日明细`;
-  $('detailBody').innerHTML = '<tr><td colspan="7" class="empty">加载中...</td></tr>';
+  $('detailBody').innerHTML = '<tr><td colspan="10" class="empty">加载中...</td></tr>';
   $('detailModal').classList.add('show');
   let url = `/api/detail/${encodeURIComponent(label)}?`;
   if (useCustom) {
@@ -114,28 +113,31 @@ async function openDetail(label) {
     if (!res) return;
     const json = await res.json();
     $('detailMeta').textContent =
-      `原始标签: ${json.raw_label} · 区间累计参考: ${json.latest_cumulative_reference_hours} h`;
+      `原始标签: ${json.raw_label} · 平台累计参考: ${json.cumulative_reference_alltime_hours} h`;
     if (!json.daily.length) {
-      $('detailBody').innerHTML = '<tr><td colspan="7" class="empty">该区间暂无数据</td></tr>';
+      $('detailBody').innerHTML = '<tr><td colspan="10" class="empty">该区间暂无数据</td></tr>';
       return;
     }
     $('detailBody').innerHTML = json.daily.map((d) => `
       <tr>
         <td>${d.date}</td>
         <td class="num">${d.raw_hours}</td>
+        <td class="num">${d.new_task_hours}</td>
+        <td class="num">${d.old_task_hours}</td>
         <td class="num">${d.segment_hours}</td>
         <td class="num">${d.no_clip_hours}</td>
         <td class="num">${d.no_clip_equivalent_hours}</td>
         <td class="num">${d.settlement_reference_hours}</td>
+        <td class="num">${d.pass_ratio}%</td>
         <td class="num">${d.cumulative_reference_hours}</td>
       </tr>
     `).join('');
   } catch (e) {
-    $('detailBody').innerHTML = `<tr><td colspan="7" class="empty">加载失败: ${e.message}</td></tr>`;
+    $('detailBody').innerHTML = `<tr><td colspan="10" class="empty">加载失败: ${e.message}</td></tr>`;
   }
 }
 
-// ===== 导出 CSV（通过 token 查询参数下载）=====
+// ===== 导出 CSV =====
 function exportCSV() {
   const token = getToken();
   if (!token) {
@@ -160,12 +162,59 @@ async function refreshData() {
   btn.textContent = '采集中...'; btn.disabled = true;
   try {
     await authFetch('/api/collect', { method: 'POST' });
-    // 等待几秒后重新加载
     setTimeout(() => { loadSummary(); loadStatus(); }, 5000);
   } catch (e) {
     alert('触发采集失败: ' + e.message);
   } finally {
     setTimeout(() => { btn.textContent = '刷新数据'; btn.disabled = false; }, 5000);
+  }
+}
+
+// ===== 回填历史数据 =====
+async function doBackfill() {
+  const start = $('backfillStart').value;
+  const end = $('backfillEnd').value;
+  const resultDiv = $('backfillResult');
+  const btn = $('doBackfill');
+
+  if (!start || !end) {
+    resultDiv.innerHTML = '<span style="color: red;">请选择起止日期</span>';
+    return;
+  }
+  if (start > end) {
+    resultDiv.innerHTML = '<span style="color: red;">起始日期不能晚于结束日期</span>';
+    return;
+  }
+
+  // 检查日期范围不超过7天
+  const diffDays = Math.ceil((new Date(end) - new Date(start)) / (1000 * 60 * 60 * 24)) + 1;
+  if (diffDays > 7) {
+    resultDiv.innerHTML = '<span style="color: red;">每次最多回填7天，请缩小日期范围</span>';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = '回填中...';
+  resultDiv.innerHTML = `<span style="color: #666;">正在回填 ${start} 至 ${end}（共${diffDays}天），请耐心等待...</span>`;
+
+  try {
+    const res = await authFetch(`/api/backfill?start=${start}&end=${end}`);
+    if (!res) return;
+    const json = await res.json();
+    if (json.ok) {
+      resultDiv.innerHTML = `
+        <div style="color: green; margin-bottom: 8px;">✓ ${json.message}</div>
+        <div style="font-size: 12px; color: #999;">${(json.results || []).map(r => `${r.date}: ${r.count}人${r.error ? ' (错误: ' + r.error + ')' : ''}`).join('；')}</div>
+      `;
+      setTimeout(() => { loadSummary(); loadStatus(); }, 2000);
+    } else {
+      resultDiv.innerHTML = `<span style="color: red;">✗ ${json.error}</span>`;
+    }
+  } catch (e) {
+    resultDiv.innerHTML = `<span style="color: red;">✗ 请求失败: ${e.message}</span>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '开始回填';
   }
 }
 
@@ -200,7 +249,6 @@ function fmtTime(iso) {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
-// ===== 登出 =====
 function logout() {
   redirectToLogin();
 }
@@ -239,8 +287,25 @@ $('detailModal').addEventListener('click', (e) => {
   if (e.target === $('detailModal')) $('detailModal').classList.remove('show');
 });
 
+// 回填弹窗事件
+$('backfillBtn').addEventListener('click', () => {
+  // 默认填入最近7天
+  const today = new Date();
+  const week = new Date(today);
+  week.setDate(week.getDate() - 6);
+  const p = (n) => String(n).padStart(2, '0');
+  $('backfillStart').value = `${week.getFullYear()}-${p(week.getMonth() + 1)}-${p(week.getDate())}`;
+  $('backfillEnd').value = `${today.getFullYear()}-${p(today.getMonth() + 1)}-${p(today.getDate())}`;
+  $('backfillResult').innerHTML = '';
+  $('backfillModal').classList.add('show');
+});
+$('closeBackfill').addEventListener('click', () => $('backfillModal').classList.remove('show'));
+$('backfillModal').addEventListener('click', (e) => {
+  if (e.target === $('backfillModal')) $('backfillModal').classList.remove('show');
+});
+$('doBackfill').addEventListener('click', doBackfill);
+
 // ===== 初始化 =====
-// 默认日期填今天
 const today = new Date();
 const p = (n) => String(n).padStart(2, '0');
 const todayStr = `${today.getFullYear()}-${p(today.getMonth() + 1)}-${p(today.getDate())}`;

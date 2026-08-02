@@ -42,12 +42,19 @@ module.exports = requireAuth(async (req, res) => {
     const annotator = annResult.rows[0];
 
     const allResult = await db.execute({
-      sql: `SELECT date, raw_seconds, segment_seconds, no_clip_seconds,
-             no_clip_equivalent_seconds, settlement_reference_seconds,
-             pass_segment_seconds, new_task_raw_seconds, old_task_raw_seconds
+      sql: `SELECT date, raw_seconds, new_task_raw_seconds, old_task_raw_seconds,
+             segment_seconds, pass_segment_seconds,
+             no_clip_seconds, no_clip_equivalent_seconds, settlement_reference_seconds
       FROM daily_stats WHERE annotator_id = ? ORDER BY date ASC`,
       args: [annotator.id],
     });
+
+    // 获取累计参考（从 annotator_cumulative 表）
+    const cumResult = await db.execute({
+      sql: 'SELECT cumulative_reference_alltime FROM annotator_cumulative WHERE annotator_id = ?',
+      args: [annotator.id],
+    });
+    const cumulativeAlltime = cumResult.rows.length ? Number(cumResult.rows[0].cumulative_reference_alltime) : 0;
 
     let running = 0;
     const fullWithCum = allResult.rows.map((r) => {
@@ -57,23 +64,30 @@ module.exports = requireAuth(async (req, res) => {
 
     const daily = fullWithCum
       .filter((r) => r.date >= start && r.date <= end)
-      .map((r) => ({
-        date: r.date,
-        raw_hours: s2h(r.raw_seconds),
-        segment_hours: s2h(r.segment_seconds),
-        no_clip_hours: s2h(r.no_clip_seconds),
-        no_clip_equivalent_hours: s2h(r.no_clip_equivalent_seconds),
-        settlement_reference_hours: s2h(r.settlement_reference_seconds),
-        cumulative_reference_hours: s2h(r.running_cumulative_seconds),
-        pass_segment_hours: s2h(r.pass_segment_seconds),
-        new_task_raw_hours: s2h(r.new_task_raw_seconds),
-        old_task_raw_hours: s2h(r.old_task_raw_seconds),
-      }));
+      .map((r) => {
+        const passRatio = Number(r.segment_seconds) > 0
+          ? Math.round((Number(r.pass_segment_seconds) / Number(r.segment_seconds)) * 1000) / 10
+          : 0;
+        return {
+          date: r.date,
+          raw_hours: s2h(r.raw_seconds),
+          new_task_hours: s2h(r.new_task_raw_seconds),
+          old_task_hours: s2h(r.old_task_raw_seconds),
+          segment_hours: s2h(r.segment_seconds),
+          pass_segment_hours: s2h(r.pass_segment_seconds),
+          no_clip_hours: s2h(r.no_clip_seconds),
+          no_clip_equivalent_hours: s2h(r.no_clip_equivalent_seconds),
+          settlement_reference_hours: s2h(r.settlement_reference_seconds),
+          pass_ratio: passRatio,
+          cumulative_reference_hours: s2h(r.running_cumulative_seconds),
+        };
+      });
 
     res.json({
       label: annotator.label,
       raw_label: annotator.raw_label,
       range: { start, end },
+      cumulative_reference_alltime_hours: s2h(cumulativeAlltime),
       latest_cumulative_reference_hours: fullWithCum.length
         ? s2h(fullWithCum[fullWithCum.length - 1].running_cumulative_seconds) : 0,
       daily,

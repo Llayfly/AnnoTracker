@@ -40,6 +40,7 @@
         <input type="text" id="searchInput" placeholder="按标注员名称搜索..." />
       </div>
       <div class="actions">
+        <button id="backfillBtn" class="btn-secondary">回填历史数据</button>
         <button id="exportBtn" class="btn-secondary">导出CSV</button>
         <button id="refreshBtn" class="btn-secondary">刷新数据</button>
       </div>
@@ -64,10 +65,13 @@
             <tr>
               <th>标注员</th>
               <th>原始时长(h)</th>
+              <th>新任务(h)</th>
+              <th>旧任务(h)</th>
               <th>片段时长(h)</th>
-              <th>无片段时长(h)</th>
+              <th>无片段(h)</th>
               <th>无片段等效(h)</th>
               <th>结算参考(h)</th>
+              <th>PASS占比</th>
               <th>累计参考(h)</th>
               <th>日均时长(h)</th>
               <th>活跃天数</th>
@@ -75,7 +79,7 @@
             </tr>
           </thead>
           <tbody id="summaryBody">
-            <tr><td colspan="10" class="empty">加载中...</td></tr>
+            <tr><td colspan="13" class="empty">加载中...</td></tr>
           </tbody>
         </table>
       </div>
@@ -96,15 +100,39 @@
             <tr>
               <th>日期</th>
               <th>原始时长(h)</th>
+              <th>新任务(h)</th>
+              <th>旧任务(h)</th>
               <th>片段时长(h)</th>
-              <th>无片段时长(h)</th>
+              <th>无片段(h)</th>
               <th>无片段等效(h)</th>
               <th>结算参考(h)</th>
-              <th>累计参考(h)</th>
+              <th>PASS占比</th>
+              <th>区间累计(h)</th>
             </tr>
           </thead>
           <tbody id="detailBody"></tbody>
         </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- 回填弹窗 -->
+  <div class="modal" id="backfillModal">
+    <div class="modal-content" style="max-width: 480px;">
+      <div class="modal-head">
+        <h2>回填历史数据</h2>
+        <button class="close" id="closeBackfill">&times;</button>
+      </div>
+      <div style="padding: 16px 0;">
+        <p style="margin-bottom: 12px; color: #666;">输入需要回填的日期范围，系统将逐日采集历史数据。</p>
+        <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 12px;">
+          <input type="date" id="backfillStart" style="flex: 1; padding: 6px 8px; border: 1px solid #ddd; border-radius: 4px;" />
+          <span>至</span>
+          <input type="date" id="backfillEnd" style="flex: 1; padding: 6px 8px; border: 1px solid #ddd; border-radius: 4px;" />
+        </div>
+        <p style="margin-bottom: 12px; color: #999; font-size: 12px;">提示：每次最多回填7天，避免超时。如需更多请分多次执行。</p>
+        <button id="doBackfill" style="width: 100%; padding: 10px; background: #111; color: #fff; border: none; border-radius: 6px; cursor: pointer;">开始回填</button>
+        <div id="backfillResult" style="margin-top: 12px; font-size: 13px; color: #666;"></div>
       </div>
     </div>
   </div>

@@ -44,41 +44,47 @@ module.exports = requireAuth(async (req, res) => {
     const { start, end } = getRange(req.query);
     const search = req.query.search ? `%${req.query.search.trim()}%` : '%';
 
-    // 用 LEFT JOIN 子查询替代标量子查询，大幅减少扫描次数
+    // 使用 annotator_cumulative 表获取真实累计值，而非从 daily_stats 累加
     const result = await db.execute({
       sql: `SELECT
         a.id, a.label, a.raw_label,
         COALESCE(SUM(d.raw_seconds),0) AS raw_seconds,
+        COALESCE(SUM(d.new_task_raw_seconds),0) AS new_task_raw_seconds,
+        COALESCE(SUM(d.old_task_raw_seconds),0) AS old_task_raw_seconds,
         COALESCE(SUM(d.segment_seconds),0) AS segment_seconds,
+        COALESCE(SUM(d.pass_segment_seconds),0) AS pass_segment_seconds,
         COALESCE(SUM(d.no_clip_seconds),0) AS no_clip_seconds,
         COALESCE(SUM(d.no_clip_equivalent_seconds),0) AS no_clip_equivalent_seconds,
         COALESCE(SUM(d.settlement_reference_seconds),0) AS settlement_reference_seconds,
         COUNT(d.date) AS active_days,
-        COALESCE(cum.cum_ref, 0) AS cumulative_reference_seconds
+        COALESCE(ac.cumulative_reference_alltime, 0) AS cumulative_reference_seconds
       FROM annotators a
       LEFT JOIN daily_stats d ON d.annotator_id = a.id AND d.date >= ? AND d.date <= ?
-      LEFT JOIN (
-        SELECT annotator_id, SUM(settlement_reference_seconds) AS cum_ref
-        FROM daily_stats WHERE date <= ?
-        GROUP BY annotator_id
-      ) cum ON cum.annotator_id = a.id
+      LEFT JOIN annotator_cumulative ac ON ac.annotator_id = a.id
       WHERE a.label LIKE ?
       GROUP BY a.id
       HAVING active_days > 0
       ORDER BY raw_seconds DESC`,
-      args: [start, end, end, search],
+      args: [start, end, search],
     });
 
     const data = result.rows.map((r) => {
       const dailyAvgRawHours = r.active_days > 0 ? Number(r.raw_seconds) / r.active_days / SEC_PER_HOUR : 0;
+      const passRatio = Number(r.segment_seconds) > 0
+        ? Math.round((Number(r.pass_segment_seconds) / Number(r.segment_seconds)) * 1000) / 10
+        : 0;
       return {
         label: r.label,
         raw_label: r.raw_label,
         raw_hours: s2h(r.raw_seconds),
+        new_task_hours: s2h(r.new_task_raw_seconds),
+        old_task_hours: s2h(r.old_task_raw_seconds),
         segment_hours: s2h(r.segment_seconds),
+        pass_segment_hours: s2h(r.pass_segment_seconds),
         no_clip_hours: s2h(r.no_clip_seconds),
         no_clip_equivalent_hours: s2h(r.no_clip_equivalent_seconds),
         settlement_reference_hours: s2h(r.settlement_reference_seconds),
+        pass_ratio: passRatio,
         cumulative_reference_hours: s2h(r.cumulative_reference_seconds),
         daily_avg_raw_hours: Math.round(dailyAvgRawHours * 1000) / 1000,
         active_days: r.active_days,
