@@ -127,10 +127,18 @@ async function loadBatches() {
 }
 
 function renderBatchTable(items) {
-  let html = `<div class="table-wrap"><table style="width:100%;font-size:13px;">
+  let html = `<div class="table-wrap"><table class="batch-table">
     <thead><tr>
-      <th>批次ID</th><th>标注员</th><th>项目类型</th><th>状态</th><th>审核结果</th>
-      <th>审核人</th><th>轮次</th><th>进度</th><th>备注</th><th>操作</th>
+      <th style="width:70px;">批次ID</th>
+      <th style="width:70px;">标注员</th>
+      <th style="width:110px;">项目类型</th>
+      <th style="width:70px;">状态</th>
+      <th style="width:70px;">审核结果</th>
+      <th style="width:70px;">审核人</th>
+      <th style="width:45px;">轮次</th>
+      <th style="width:70px;">进度</th>
+      <th style="text-align:left;">备注</th>
+      <th style="width:90px;">操作</th>
     </tr></thead><tbody>`;
   for (const b of items) {
     const sc = statusClass[b.status] || '';
@@ -143,7 +151,7 @@ function renderBatchTable(items) {
       <td>${b.reviewer || '—'}</td>
       <td style="text-align:center;">${b.round}</td>
       <td class="progress-cell">${b.progress_current}/${b.progress_total}</td>
-      <td>${b.note || ''}</td>
+      <td style="text-align:left;white-space:normal;word-break:break-word;">${b.note || ''}</td>
       <td>
         <button class="btn-edit" data-id="${b.id}">编辑</button>
         <button class="btn-del" data-id="${b.id}">删除</button>
