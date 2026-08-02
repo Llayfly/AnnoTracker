@@ -1,7 +1,7 @@
 'use strict';
 // GET /api/cron —— 定时采集端点
 // 供 Vercel Cron 或外部 cron-job.org 调用，通过 CRON_SECRET 密钥验证，无需 JWT 登录
-const { collectToday } = require('../lib/collector');
+const { collectToday, collectBatches } = require('../lib/collector');
 
 module.exports = async (req, res) => {
   const secret = process.env.CRON_SECRET;
@@ -18,10 +18,18 @@ module.exports = async (req, res) => {
   }
   try {
     const count = await collectToday();
+    // 同时采集批次数据（失败不影响主流程）
+    let batchResult = null;
+    try {
+      batchResult = await collectBatches();
+    } catch (e) {
+      console.error('[api] cron batch collection error:', e.message);
+    }
     res.json({
       ok: true,
       message: '定时采集完成',
       count,
+      batch: batchResult,
       time: new Date().toISOString(),
     });
   } catch (e) {

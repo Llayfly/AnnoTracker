@@ -33,6 +33,8 @@ const statusClass = {
   '待审核': 'st-pending',
   '已通过': 'st-passed',
   '需修改': 'st-rejected',
+  '已驳回': 'st-rejected',
+  '已废弃': 'st-abandoned',
 };
 
 // 获取分组
@@ -285,8 +287,39 @@ async function delBatch(id) {
   }
 }
 
+// ===== 自动采集批次 =====
+async function autoCollect() {
+  const btn = $('autoCollectBtn');
+  const status = $('collectStatus');
+  btn.disabled = true;
+  btn.textContent = '采集中...';
+  btn.style.background = '#999';
+  status.innerHTML = '<span style="color:#1565c0;">正在从平台拉取批次数据，请稍候...</span>';
+
+  try {
+    const res = await authFetch('/api/collect-batches', { method: 'POST' });
+    if (!res) return;
+    const json = await res.json();
+    if (json.ok) {
+      const summary = json.status_summary ? Object.entries(json.status_summary)
+        .map(([k, v]) => `${k}: ${v}`).join('，') : '';
+      status.innerHTML = `<span style="color:#2e7d32;">✓ ${json.message}${summary ? '（' + summary + '）' : ''}</span>`;
+      loadBatches();
+    } else {
+      status.innerHTML = `<span style="color:#c62828;">✗ 采集失败: ${json.error || '未知错误'}</span>`;
+    }
+  } catch (e) {
+    status.innerHTML = `<span style="color:#c62828;">✗ 请求失败: ${e.message}</span>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '从平台自动采集批次';
+    btn.style.background = '#1565c0';
+  }
+}
+
 // ===== 事件绑定 =====
 $('addBatchBtn').addEventListener('click', addBatch);
+$('autoCollectBtn').addEventListener('click', autoCollect);
 $('filterBtn').addEventListener('click', loadBatches);
 $('clearFilterBtn').addEventListener('click', () => {
   $('filterDate').value = '';

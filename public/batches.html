@@ -11,6 +11,7 @@
     .st-pending { background: #f3e5f5; color: #6a1b9a; }
     .st-passed { background: #e8f5e9; color: #2e7d32; }
     .st-rejected { background: #fff3e0; color: #e65100; }
+    .st-abandoned { background: #ffebee; color: #b71c1c; }
     .section-title { font-size: 18px; font-weight: 700; margin: 20px 0 10px; padding: 8px 12px; border-radius: 6px; }
     .section-hc { background: #e3f2fd; color: #1565c0; }
     .section-c { background: #fce4ec; color: #c62828; }
@@ -55,6 +56,16 @@
       <a href="/batches" class="nav-tab active">批次管理</a>
     </div>
 
+    <!-- 自动采集按钮 -->
+    <div style="display:flex;gap:10px;align-items:center;margin-bottom:16px;">
+      <button class="btn-add" id="autoCollectBtn" style="background:#1565c0;padding:10px 24px;font-size:14px;">
+        从平台自动采集批次
+      </button>
+      <span id="collectStatus" style="font-size:13px;color:#666;"></span>
+      <span style="flex:1"></span>
+      <span style="font-size:12px;color:#999;">手动添加的记录不会被自动采集覆盖</span>
+    </div>
+
     <!-- 添加批次表单 -->
     <div class="batch-form" id="addForm">
       <div class="form-group">
@@ -73,7 +84,9 @@
           <option>餐饮接待类标注</option>
           <option>定制操作类标注</option>
           <option>生产制造类标注</option>
-          <option>仓储物流类标注</option>
+          <option>仓配物流类标注</option>
+          <option>家庭服务类标注</option>
+          <option>住宿服务类标注</option>
         </select>
       </div>
       <div class="form-group">
@@ -83,6 +96,8 @@
           <option value="待审核">待审核</option>
           <option value="已通过">已通过</option>
           <option value="需修改">需修改</option>
+          <option value="已驳回">已驳回</option>
+          <option value="已废弃">已废弃</option>
         </select>
       </div>
       <div class="form-group">
@@ -130,6 +145,8 @@
         <option value="待审核">待审核</option>
         <option value="已通过">已通过</option>
         <option value="需修改">需修改</option>
+        <option value="已驳回">已驳回</option>
+        <option value="已废弃">已废弃</option>
       </select>
       <select id="filterGroup">
         <option value="">全部账号</option>
@@ -176,7 +193,9 @@
               <option>餐饮接待类标注</option>
               <option>定制操作类标注</option>
               <option>生产制造类标注</option>
-              <option>仓储物流类标注</option>
+              <option>仓配物流类标注</option>
+              <option>家庭服务类标注</option>
+              <option>住宿服务类标注</option>
             </select>
           </div>
           <div class="form-group">
@@ -186,6 +205,8 @@
               <option value="待审核">待审核</option>
               <option value="已通过">已通过</option>
               <option value="需修改">需修改</option>
+              <option value="已驳回">已驳回</option>
+              <option value="已废弃">已废弃</option>
             </select>
           </div>
           <div class="form-group">
@@ -231,6 +252,6 @@
     <span id="footStatus"></span>
   </footer>
 
-  <script src="batches.js?v=20260802"></script>
+  <script src="batches.js?v=20260803"></script>
 </body>
 </html>
