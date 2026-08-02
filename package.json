@@ -3,9 +3,6 @@
   "version": "1.0.0",
   "description": "标注员工作统计监控网站 - 自动从 data-platform.synapath.com 采集数据并展示",
   "scripts": {
-    "start": "node src/server.js",
-    "backfill": "node src/server.js --backfill-only",
-    "collect:once": "node src/server.js --collect-once",
     "build": "echo 'No build step required'"
   },
   "engines": {
