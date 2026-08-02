@@ -70,8 +70,8 @@ module.exports = requireAuth(async (req, res) => {
 
     const data = result.rows.map((r) => {
       const dailyAvgRawHours = r.active_days > 0 ? Number(r.raw_seconds) / r.active_days / SEC_PER_HOUR : 0;
-      const passRatio = Number(r.segment_seconds) > 0
-        ? Math.round((Number(r.pass_segment_seconds) / Number(r.segment_seconds)) * 1000) / 10
+      const passRatio = Number(r.raw_seconds) > 0
+        ? Math.round((Number(r.segment_seconds) / Number(r.raw_seconds)) * 1000) / 10
         : 0;
       return {
         label: r.label,

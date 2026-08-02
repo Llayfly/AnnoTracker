@@ -65,8 +65,8 @@ module.exports = requireAuth(async (req, res) => {
     const daily = fullWithCum
       .filter((r) => r.date >= start && r.date <= end)
       .map((r) => {
-        const passRatio = Number(r.segment_seconds) > 0
-          ? Math.round((Number(r.pass_segment_seconds) / Number(r.segment_seconds)) * 1000) / 10
+        const passRatio = Number(r.raw_seconds) > 0
+          ? Math.round((Number(r.segment_seconds) / Number(r.raw_seconds)) * 1000) / 10
           : 0;
         return {
           date: r.date,

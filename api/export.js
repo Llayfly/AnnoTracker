@@ -67,8 +67,8 @@ module.exports = requireAuth(async (req, res) => {
     const lines = [header.join(',')];
     for (const r of result.rows) {
       const avg = r.active_days > 0 ? Number(r.raw_seconds) / r.active_days / SEC_PER_HOUR : 0;
-      const passRatio = Number(r.segment_seconds) > 0
-        ? Math.round((Number(r.pass_segment_seconds) / Number(r.segment_seconds)) * 1000) / 10
+      const passRatio = Number(r.raw_seconds) > 0
+        ? Math.round((Number(r.segment_seconds) / Number(r.raw_seconds)) * 1000) / 10
         : 0;
       lines.push([
         r.label, s2h(r.raw_seconds), s2h(r.new_task_raw_seconds), s2h(r.old_task_raw_seconds),
