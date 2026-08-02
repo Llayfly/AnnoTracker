@@ -1,6 +1,6 @@
 'use strict';
 // GET /api/summary —— 汇总数据
-const { db, ensureInit } = require('../lib/db');
+const { getDb, ensureInit } = require('../lib/db');
 const { requireAuth } = require('../lib/auth');
 
 const SEC_PER_HOUR = 3600;
@@ -40,9 +40,11 @@ function getLevel(h) {
 module.exports = requireAuth(async (req, res) => {
   try {
     await ensureInit();
+    const db = getDb();
     const { start, end } = getRange(req.query);
     const search = req.query.search ? `%${req.query.search.trim()}%` : '%';
 
+    // 用 LEFT JOIN 子查询替代标量子查询，大幅减少扫描次数
     const result = await db.execute({
       sql: `SELECT
         a.id, a.label, a.raw_label,
@@ -52,15 +54,19 @@ module.exports = requireAuth(async (req, res) => {
         COALESCE(SUM(d.no_clip_equivalent_seconds),0) AS no_clip_equivalent_seconds,
         COALESCE(SUM(d.settlement_reference_seconds),0) AS settlement_reference_seconds,
         COUNT(d.date) AS active_days,
-        (SELECT COALESCE(SUM(d2.settlement_reference_seconds),0)
-         FROM daily_stats d2 WHERE d2.annotator_id = a.id AND d2.date <= ?) AS cumulative_reference_seconds
+        COALESCE(cum.cum_ref, 0) AS cumulative_reference_seconds
       FROM annotators a
       LEFT JOIN daily_stats d ON d.annotator_id = a.id AND d.date >= ? AND d.date <= ?
+      LEFT JOIN (
+        SELECT annotator_id, SUM(settlement_reference_seconds) AS cum_ref
+        FROM daily_stats WHERE date <= ?
+        GROUP BY annotator_id
+      ) cum ON cum.annotator_id = a.id
       WHERE a.label LIKE ?
       GROUP BY a.id
       HAVING active_days > 0
       ORDER BY raw_seconds DESC`,
-      args: [end, start, end, search],
+      args: [start, end, end, search],
     });
 
     const data = result.rows.map((r) => {

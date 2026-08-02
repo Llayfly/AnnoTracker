@@ -1,11 +1,12 @@
 'use strict';
 // GET /api/status —— 系统状态
-const { db, ensureInit } = require('../lib/db');
+const { getDb, ensureInit } = require('../lib/db');
 const { requireAuth } = require('../lib/auth');
 
 module.exports = requireAuth(async (req, res) => {
   try {
     await ensureInit();
+    const db = getDb();
     // 用 batch 合并 3 次查询为 1 次网络往返
     const results = await db.batch([
       'SELECT COUNT(*) AS c FROM annotators',
@@ -21,6 +22,7 @@ module.exports = requireAuth(async (req, res) => {
       server_time: new Date().toISOString(),
     });
   } catch (e) {
+    console.error('[api] status error:', e);
     res.status(500).json({ error: e.message });
   }
 });

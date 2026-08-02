@@ -2,11 +2,11 @@
   "name": "annotator-monitor",
   "version": "1.0.0",
   "description": "标注员工作统计监控网站 - 自动从 data-platform.synapath.com 采集数据并展示",
-  "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
     "backfill": "node src/server.js --backfill-only",
-    "collect:once": "node src/server.js --collect-once"
+    "collect:once": "node src/server.js --collect-once",
+    "build": "echo 'No build step required'"
   },
   "engines": {
     "node": ">=18"
@@ -14,13 +14,13 @@
   "dependencies": {
     "@libsql/client": "^0.14.0",
     "axios": "^1.7.7",
-    "jsonwebtoken": "^9.0.3"
-  },
-  "devDependencies": {
-    "better-sqlite3": "^11.3.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.21.0",
+    "jsonwebtoken": "^9.0.3",
     "node-cron": "^3.0.3"
+  },
+  "devDependencies": {
+    "better-sqlite3": "^11.3.0"
   }
 }

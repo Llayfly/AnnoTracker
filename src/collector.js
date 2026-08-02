@@ -1,25 +1,22 @@
 'use strict';
 // 数据采集模块：登录平台获取 JWT，调用统计 API，解析并入库
+// 自动适配 Turso（异步 batch）和本地 SQLite（同步 transaction）两种模式
 const axios = require('axios');
 const config = require('./config');
-const { db, ensureAnnotator, stmtUpsertDaily, stmtUpsertCumulative, logRun } = require('./db');
+const { db, ensureAnnotator, stmtUpsertDaily, stmtUpsertCumulative, logRun, useTurso, ensureInit } = require('./db');
 
 const http = axios.create({
   baseURL: config.platform.baseUrl,
   timeout: config.requestTimeoutMs,
 });
 
-// token 缓存
 let cachedToken = null;
 let tokenExpireAt = 0;
-// 平台数据起始日期缓存（用于累计查询）
 let cachedInception = null;
-// 采集互斥锁，防止定时任务重叠
 let collecting = false;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// 登录获取 token
 async function login() {
   const res = await http.post(config.platform.loginPath, {
     email: config.platform.email,
@@ -30,14 +27,12 @@ async function login() {
     throw new Error('登录失败：未返回 access_token');
   }
   cachedToken = data.access_token;
-  // expires_in 单位秒，提前 5 分钟过期
   const expiresIn = data.expires_in || 28800;
   tokenExpireAt = Date.now() + expiresIn * 1000 - 5 * 60 * 1000;
   console.log('[collector] 登录成功，token 将在', Math.round(expiresIn / 3600), '小时后过期');
   return cachedToken;
 }
 
-// 获取有效 token
 async function getToken() {
   if (!cachedToken || Date.now() >= tokenExpireAt) {
     await login();
@@ -45,7 +40,6 @@ async function getToken() {
   return cachedToken;
 }
 
-// 带认证的 GET 请求，遇 401 自动重新登录重试一次
 async function authGet(path, params) {
   const token = await getToken();
   try {
@@ -70,13 +64,30 @@ async function authGet(path, params) {
   }
 }
 
+// ===== Turso 模式：批量写入辅助函数 =====
+async function tursoUpsertDaily(items) {
+  const stmts = items.map((it) => ({
+    sql: `INSERT INTO daily_stats (annotator_id, date, raw_seconds, segment_seconds, no_clip_seconds, no_clip_equivalent_seconds, pass_segment_seconds, settlement_reference_seconds, new_task_raw_seconds, old_task_raw_seconds, collected_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(annotator_id, date) DO UPDATE SET raw_seconds=excluded.raw_seconds, segment_seconds=excluded.segment_seconds, no_clip_seconds=excluded.no_clip_seconds, no_clip_equivalent_seconds=excluded.no_clip_equivalent_seconds, pass_segment_seconds=excluded.pass_segment_seconds, settlement_reference_seconds=excluded.settlement_reference_seconds, new_task_raw_seconds=excluded.new_task_raw_seconds, old_task_raw_seconds=excluded.old_task_raw_seconds, collected_at=excluded.collected_at`,
+    args: [it.annotator_id, it.date, it.raw_seconds, it.segment_seconds, it.no_clip_seconds, it.no_clip_equivalent_seconds, it.pass_segment_seconds, it.settlement_reference_seconds, it.new_task_raw_seconds, it.old_task_raw_seconds, it.collected_at],
+  }));
+  await db.batch(stmts, 'write');
+}
+
+async function tursoUpsertCumulative(items) {
+  const stmts = items.map((it) => ({
+    sql: `INSERT INTO annotator_cumulative (annotator_id, cumulative_reference_alltime, cumulative_raw_alltime, cumulative_segment_alltime, cumulative_no_clip_alltime, cumulative_no_clip_equivalent_alltime, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(annotator_id) DO UPDATE SET cumulative_reference_alltime=excluded.cumulative_reference_alltime, cumulative_raw_alltime=excluded.cumulative_raw_alltime, cumulative_segment_alltime=excluded.cumulative_segment_alltime, cumulative_no_clip_alltime=excluded.cumulative_no_clip_alltime, cumulative_no_clip_equivalent_alltime=excluded.cumulative_no_clip_equivalent_alltime, updated_at=excluded.updated_at`,
+    args: [it.annotator_id, it.cumulative_reference_alltime, it.cumulative_raw_alltime, it.cumulative_segment_alltime, it.cumulative_no_clip_alltime, it.cumulative_no_clip_equivalent_alltime, it.now],
+  }));
+  await db.batch(stmts, 'write');
+}
+
 // 采集单日数据
 async function collectDay(dateStr) {
+  if (useTurso) await ensureInit();
   const data = await authGet(config.platform.analyticsPath, {
     organization: config.platform.org,
     day: dateStr,
   });
-  // 缓存平台数据起始日期
   if (data && Array.isArray(data.date_options) && data.date_options.length && !cachedInception) {
     cachedInception = data.date_options[0];
   }
@@ -85,12 +96,9 @@ async function collectDay(dateStr) {
   const now = new Date().toISOString();
   let count = 0;
 
-  const upsertMany = db.transaction((items) => {
-    for (const it of items) stmtUpsertDaily.run(it);
-  });
   const items = [];
   for (const row of rows) {
-    const annotatorId = ensureAnnotator(row.person_label);
+    const annotatorId = useTurso ? await ensureAnnotator(row.person_label) : ensureAnnotator(row.person_label);
     const noClip = Number(row.no_clip_duration_seconds) || 0;
     const noClipEquiv = noClip * factor;
     const passSeg = Number(row.pass_segment_duration_seconds) || 0;
@@ -110,14 +118,24 @@ async function collectDay(dateStr) {
     });
     count++;
   }
-  if (items.length) upsertMany(items);
+
+  if (items.length) {
+    if (useTurso) {
+      await tursoUpsertDaily(items);
+    } else {
+      const upsertMany = db.transaction((its) => {
+        for (const it of its) stmtUpsertDaily.run(it);
+      });
+      upsertMany(items);
+    }
+  }
   console.log(`[collector] ${dateStr} 采集完成，共 ${count} 名标注员`);
   return count;
 }
 
-// 采集全量累计快照（结算参考的累计值，来自平台 settlement 行）
+// 采集全量累计快照
 async function collectCumulative(endDateStr) {
-  // 确定起始日期
+  if (useTurso) await ensureInit();
   if (!cachedInception) {
     const data = await authGet(config.platform.analyticsPath, {
       organization: config.platform.org,
@@ -136,30 +154,34 @@ async function collectCumulative(endDateStr) {
   const rows = (data && data.organization_person_settlement_rows) || [];
   const now = new Date().toISOString();
   let count = 0;
-  const upsertMany = db.transaction((items) => {
-    for (const it of items) stmtUpsertCumulative.run(it);
-  });
   const items = [];
   for (const row of rows) {
-    const annotatorId = ensureAnnotator(row.person_label);
+    const annotatorId = useTurso ? await ensureAnnotator(row.person_label) : ensureAnnotator(row.person_label);
     items.push({
       annotator_id: annotatorId,
       cumulative_reference_alltime: Number(row.cumulative_settlement_reference_duration_seconds) || 0,
       cumulative_raw_alltime: Number(row.cumulative_raw_video_duration_seconds) || 0,
       cumulative_segment_alltime: Number(row.cumulative_segment_duration_seconds) || 0,
       cumulative_no_clip_alltime: Number(row.cumulative_no_clip_duration_seconds) || 0,
-      cumulative_no_clip_equivalent_alltime:
-        Number(row.cumulative_no_clip_equivalent_duration_seconds) || 0,
+      cumulative_no_clip_equivalent_alltime: Number(row.cumulative_no_clip_equivalent_duration_seconds) || 0,
       now,
     });
     count++;
   }
-  if (items.length) upsertMany(items);
+  if (items.length) {
+    if (useTurso) {
+      await tursoUpsertCumulative(items);
+    } else {
+      const upsertMany = db.transaction((its) => {
+        for (const it of its) stmtUpsertCumulative.run(it);
+      });
+      upsertMany(items);
+    }
+  }
   console.log(`[collector] 累计快照采集完成，共 ${count} 名标注员`);
   return count;
 }
 
-// 日期工具
 function fmtDate(d) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -190,27 +212,26 @@ async function backfill(days) {
         total += await collectDay(dateStr);
       } catch (e) {
         console.error(`[collector] 回填 ${dateStr} 失败:`, e.message);
-        logRun(runType, dateStr, 'error', e.message, 0);
+        await logRun(runType, dateStr, 'error', e.message, 0);
       }
       await sleep(config.requestDelayMs);
     }
-    // 回填完成后采集累计快照
     try {
       await collectCumulative(fmtDate(today));
     } catch (e) {
       console.error('[collector] 累计快照采集失败:', e.message);
     }
-    logRun(runType, null, 'success', `回填 ${targets.length} 天完成`, total);
+    await logRun(runType, null, 'success', `回填 ${targets.length} 天完成`, total);
     console.log('[collector] 回填全部完成');
   } catch (e) {
-    logRun(runType, null, 'error', e.message, 0);
+    await logRun(runType, null, 'error', e.message, 0);
     console.error('[collector] 回填异常:', e.message);
   } finally {
     collecting = false;
   }
 }
 
-// 采集当天最新数据（每 30 分钟调用）
+// 采集当天最新数据
 async function collectToday() {
   if (collecting) {
     console.log('[collector] 已有采集任务在运行，跳过本次当天采集');
@@ -226,9 +247,9 @@ async function collectToday() {
     } catch (e) {
       console.error('[collector] 当天累计快照失败:', e.message);
     }
-    logRun(runType, dateStr, 'success', '当天采集完成', count);
+    await logRun(runType, dateStr, 'success', '当天采集完成', count);
   } catch (e) {
-    logRun(runType, dateStr, 'error', e.message, 0);
+    await logRun(runType, dateStr, 'error', e.message, 0);
     console.error('[collector] 当天采集失败:', e.message);
   } finally {
     collecting = false;
@@ -253,17 +274,18 @@ async function collectYesterday() {
     } catch (e) {
       console.error('[collector] 补采累计快照失败:', e.message);
     }
-    logRun(runType, dateStr, 'success', '补采前一天完成', count);
+    await logRun(runType, dateStr, 'success', '补采前一天完成', count);
   } catch (e) {
-    logRun(runType, dateStr, 'error', e.message, 0);
+    await logRun(runType, dateStr, 'error', e.message, 0);
     console.error('[collector] 补采前一天失败:', e.message);
   } finally {
     collecting = false;
   }
 }
 
-// 补采缺失的日期（启动时检查最近 N 天是否有数据，缺失则补采）
+// 补采缺失的日期
 async function backfillMissing(days) {
+  if (useTurso) await ensureInit();
   const today = new Date();
   const targets = [];
   for (let i = 0; i < days; i++) {
@@ -271,12 +293,16 @@ async function backfillMissing(days) {
     d.setDate(d.getDate() - i);
     targets.push(fmtDate(d));
   }
-  // 查询已存在的日期
   const placeholders = targets.map(() => '?').join(',');
-  const existing = db
-    .prepare(`SELECT DISTINCT date FROM daily_stats WHERE date IN (${placeholders})`)
-    .all(...targets)
-    .map((r) => r.date);
+
+  let existing;
+  if (useTurso) {
+    const result = await db.execute({ sql: `SELECT DISTINCT date FROM daily_stats WHERE date IN (${placeholders})`, args: targets });
+    existing = result.rows.map((r) => r.date);
+  } else {
+    existing = db.prepare(`SELECT DISTINCT date FROM daily_stats WHERE date IN (${placeholders})`).all(...targets).map((r) => r.date);
+  }
+
   const missing = targets.filter((t) => !existing.includes(t));
   if (missing.length === 0) {
     console.log('[collector] 最近数据完整，无需补采');
@@ -300,9 +326,9 @@ async function backfillMissing(days) {
     } catch (e) {
       console.error('[collector] 补采累计快照失败:', e.message);
     }
-    logRun('backfill-missing', null, 'success', `补采 ${missing.length} 天`, total);
+    await logRun('backfill-missing', null, 'success', `补采 ${missing.length} 天`, total);
   } catch (e) {
-    logRun('backfill-missing', null, 'error', e.message, 0);
+    await logRun('backfill-missing', null, 'error', e.message, 0);
   } finally {
     collecting = false;
   }

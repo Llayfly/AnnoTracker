@@ -1,6 +1,6 @@
 'use strict';
 // GET /api/detail/:label —— 某标注员每日明细
-const { db, ensureInit } = require('../../lib/db');
+const { getDb, ensureInit } = require('../../lib/db');
 const { requireAuth } = require('../../lib/auth');
 
 const SEC_PER_HOUR = 3600;
@@ -33,6 +33,7 @@ function getRange(query) {
 module.exports = requireAuth(async (req, res) => {
   try {
     await ensureInit();
+    const db = getDb();
     const label = req.query.label || (req.params && req.params.label) || '';
     const { start, end } = getRange(req.query);
 
