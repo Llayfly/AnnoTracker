@@ -1,0 +1,11 @@
+{
+  "rewrites": [
+    { "source": "/login", "destination": "/login.html" }
+  ],
+  "crons": [
+    {
+      "path": "/api/cron",
+      "schedule": "0 0 * * *"
+    }
+  ]
+}
