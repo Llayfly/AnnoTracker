@@ -1,0 +1,13 @@
+{
+  "name": "annotator-monitor-local",
+  "version": "1.0.0",
+  "description": "本地开发依赖 - 不部署到 Vercel",
+  "private": true,
+  "dependencies": {
+    "better-sqlite3": "^11.3.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.0",
+    "node-cron": "^3.0.3"
+  }
+}
