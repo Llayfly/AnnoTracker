@@ -1,0 +1,10 @@
+# 本地 Express 服务器代码 —— 不部署到 Vercel
+src/
+# 部署脚本和配置
+deploy/
+# PM2 配置（本地进程管理）
+ecosystem.config.js
+# 本地开发依赖清单
+package.local.json
+# 本地环境配置
+.env.example
