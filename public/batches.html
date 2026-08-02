@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>批次管理 - 标注员工作统计监控</title>
+  <link rel="stylesheet" href="style.css?v=20260802" />
+  <style>
+    .batch-status { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; }
+    .st-distributed { background: #e3f2fd; color: #1565c0; }
+    .st-pending { background: #f3e5f5; color: #6a1b9a; }
+    .st-passed { background: #e8f5e9; color: #2e7d32; }
+    .st-rejected { background: #fff3e0; color: #e65100; }
+    .section-title { font-size: 18px; font-weight: 700; margin: 20px 0 10px; padding: 8px 12px; border-radius: 6px; }
+    .section-hc { background: #e3f2fd; color: #1565c0; }
+    .section-c { background: #fce4ec; color: #c62828; }
+    .section-s { background: #f3e5f5; color: #6a1b9a; }
+    .section-other { background: #f5f5f5; color: #616161; }
+    .batch-form { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; margin-bottom: 20px; padding: 16px; background: #f9f9f9; border-radius: 8px; }
+    .batch-form input, .batch-form select { padding: 6px 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px; }
+    .batch-form label { font-size: 12px; color: #666; display: block; margin-bottom: 2px; }
+    .form-group { display: flex; flex-direction: column; }
+    .form-actions { grid-column: 1 / -1; display: flex; gap: 8px; }
+    .btn-add { padding: 8px 20px; background: #111; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; }
+    .btn-add:hover { background: #333; }
+    .btn-edit { padding: 2px 8px; background: #e3f2fd; color: #1565c0; border: 1px solid #90caf9; border-radius: 4px; cursor: pointer; font-size: 11px; margin-right: 4px; }
+    .btn-del { padding: 2px 8px; background: #fce4ec; color: #c62828; border: 1px solid #ef9a9a; border-radius: 4px; cursor: pointer; font-size: 11px; }
+    .filter-bar { display: flex; gap: 10px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
+    .filter-bar select, .filter-bar input { padding: 6px 10px; border: 1px solid #ddd; border-radius: 4px; }
+    .nav-tabs { display: flex; gap: 0; margin-bottom: 20px; border-bottom: 2px solid #e0e0e0; }
+    .nav-tab { padding: 10px 24px; text-decoration: none; color: #666; font-weight: 600; border-bottom: 3px solid transparent; margin-bottom: -2px; }
+    .nav-tab.active { color: #111; border-bottom-color: #111; }
+    .nav-tab:hover { color: #333; }
+    .progress-cell { font-size: 12px; color: #666; }
+    .summary-bar { display: flex; gap: 16px; margin-bottom: 16px; flex-wrap: wrap; }
+    .summary-chip { padding: 4px 12px; border-radius: 16px; font-size: 13px; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <h1>批次管理</h1>
+      <span class="sub">标注员批次申请记录 · 审核状态跟踪</span>
+    </div>
+    <div class="status" id="statusBar">
+      <span class="user-badge" id="userBadge"></span>
+      <button class="logout-btn" id="logoutBtn">登出</button>
+    </div>
+  </header>
+
+  <main class="container">
+    <!-- 导航 -->
+    <div class="nav-tabs">
+      <a href="/" class="nav-tab">统计监控</a>
+      <a href="/batches" class="nav-tab active">批次管理</a>
+    </div>
+
+    <!-- 添加批次表单 -->
+    <div class="batch-form" id="addForm">
+      <div class="form-group">
+        <label>批次ID</label>
+        <input type="text" id="f_batch_id" placeholder="如 17555" />
+      </div>
+      <div class="form-group">
+        <label>标注员 *</label>
+        <input type="text" id="f_annotator" placeholder="如 HC3" />
+      </div>
+      <div class="form-group">
+        <label>项目类型</label>
+        <select id="f_project">
+          <option value="">--选择--</option>
+          <option>零售服务类标注</option>
+          <option>餐饮接待类标注</option>
+          <option>定制操作类标注</option>
+          <option>生产制造类标注</option>
+          <option>仓储物流类标注</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>状态</label>
+        <select id="f_status">
+          <option value="已分发">已分发</option>
+          <option value="待审核">待审核</option>
+          <option value="已通过">已通过</option>
+          <option value="需修改">需修改</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>审核结果</label>
+        <select id="f_review_result">
+          <option value="">无</option>
+          <option value="通过">通过</option>
+          <option value="需修改">需修改</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>审核人</label>
+        <input type="text" id="f_reviewer" placeholder="如 zhm" />
+      </div>
+      <div class="form-group">
+        <label>轮次 (round)</label>
+        <input type="number" id="f_round" value="0" min="0" />
+      </div>
+      <div class="form-group">
+        <label>进度 (当前/总数)</label>
+        <div style="display:flex;gap:4px;">
+          <input type="number" id="f_progress_current" value="0" min="0" style="flex:1" />
+          <input type="number" id="f_progress_total" value="0" min="0" style="flex:1" />
+        </div>
+      </div>
+      <div class="form-group">
+        <label>日期 *</label>
+        <input type="date" id="f_date" />
+      </div>
+      <div class="form-group">
+        <label>备注</label>
+        <input type="text" id="f_note" placeholder="可选" />
+      </div>
+      <div class="form-actions">
+        <button class="btn-add" id="addBatchBtn">添加批次</button>
+      </div>
+    </div>
+
+    <!-- 筛选 -->
+    <div class="filter-bar">
+      <input type="date" id="filterDate" />
+      <select id="filterStatus">
+        <option value="">全部状态</option>
+        <option value="已分发">已分发</option>
+        <option value="待审核">待审核</option>
+        <option value="已通过">已通过</option>
+        <option value="需修改">需修改</option>
+      </select>
+      <select id="filterGroup">
+        <option value="">全部账号</option>
+        <option value="HC">HC 开头</option>
+        <option value="C">C 开头</option>
+        <option value="S">S 开头</option>
+      </select>
+      <button class="btn-secondary" id="filterBtn">筛选</button>
+      <button class="btn-secondary" id="clearFilterBtn">清除</button>
+    </div>
+
+    <!-- 汇总 -->
+    <div class="summary-bar" id="summaryBar"></div>
+
+    <!-- 批次列表（按账号分组显示） -->
+    <div id="batchList">
+      <p class="empty">加载中...</p>
+    </div>
+  </main>
+
+  <!-- 编辑弹窗 -->
+  <div class="modal" id="editModal">
+    <div class="modal-content" style="max-width: 560px;">
+      <div class="modal-head">
+        <h2>编辑批次</h2>
+        <button class="close" id="closeEdit">&times;</button>
+      </div>
+      <div style="padding: 16px 0;">
+        <div class="batch-form" style="margin-bottom:0;" id="editForm">
+          <input type="hidden" id="e_id" />
+          <div class="form-group">
+            <label>批次ID</label>
+            <input type="text" id="e_batch_id" />
+          </div>
+          <div class="form-group">
+            <label>标注员</label>
+            <input type="text" id="e_annotator" />
+          </div>
+          <div class="form-group">
+            <label>项目类型</label>
+            <select id="e_project">
+              <option value="">--选择--</option>
+              <option>零售服务类标注</option>
+              <option>餐饮接待类标注</option>
+              <option>定制操作类标注</option>
+              <option>生产制造类标注</option>
+              <option>仓储物流类标注</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>状态</label>
+            <select id="e_status">
+              <option value="已分发">已分发</option>
+              <option value="待审核">待审核</option>
+              <option value="已通过">已通过</option>
+              <option value="需修改">需修改</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>审核结果</label>
+            <select id="e_review_result">
+              <option value="">无</option>
+              <option value="通过">通过</option>
+              <option value="需修改">需修改</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>审核人</label>
+            <input type="text" id="e_reviewer" />
+          </div>
+          <div class="form-group">
+            <label>轮次</label>
+            <input type="number" id="e_round" min="0" />
+          </div>
+          <div class="form-group">
+            <label>进度 (当前/总数)</label>
+            <div style="display:flex;gap:4px;">
+              <input type="number" id="e_progress_current" min="0" style="flex:1" />
+              <input type="number" id="e_progress_total" min="0" style="flex:1" />
+            </div>
+          </div>
+          <div class="form-group">
+            <label>日期</label>
+            <input type="date" id="e_date" />
+          </div>
+          <div class="form-group">
+            <label>备注</label>
+            <input type="text" id="e_note" />
+          </div>
+          <div class="form-actions">
+            <button class="btn-add" id="saveEditBtn">保存修改</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer class="footer">
+    <span id="footStatus"></span>
+  </footer>
+
+  <script src="batches.js?v=20260802"></script>
+</body>
+</html>
