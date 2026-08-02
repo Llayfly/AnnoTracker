@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>登录 - 标注员工作统计监控</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body class="login-page">
+  <div class="login-card">
+    <div class="login-header">
+      <h1>标注员工作统计监控</h1>
+      <p>请登录后查看数据</p>
+    </div>
+    <form id="loginForm" class="login-form">
+      <div class="form-group">
+        <label for="username">用户名</label>
+        <input type="text" id="username" name="username" placeholder="请输入用户名" autocomplete="username" required />
+      </div>
+      <div class="form-group">
+        <label for="password">密码</label>
+        <input type="password" id="password" name="password" placeholder="请输入密码" autocomplete="current-password" required />
+      </div>
+      <div class="login-error" id="loginError"></div>
+      <button type="submit" class="login-btn" id="loginBtn">登 录</button>
+    </form>
+  </div>
+
+  <script>
+    'use strict';
+    // 到达登录页时，清除任何旧的 token，避免无效 token 导致重定向死循环
+    localStorage.removeItem('am_token');
+    localStorage.removeItem('am_user');
+
+    const form = document.getElementById('loginForm');
+    const errBox = document.getElementById('loginError');
+    const btn = document.getElementById('loginBtn');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      errBox.textContent = '';
+      btn.disabled = true;
+      btn.textContent = '登录中...';
+
+      const username = document.getElementById('username').value.trim();
+      const password = document.getElementById('password').value;
+
+      try {
+        const res = await fetch('/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password }),
+        });
+        const json = await res.json();
+        if (!res.ok) {
+          throw new Error(json.error || '登录失败');
+        }
+        // 保存 token 并跳转
+        localStorage.setItem('am_token', json.token);
+        localStorage.setItem('am_user', json.username);
+        window.location.href = '/';
+      } catch (err) {
+        errBox.textContent = err.message;
+        btn.disabled = false;
+        btn.textContent = '登 录';
+      }
+    });
+  </script>
+</body>
+</html>

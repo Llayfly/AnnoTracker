@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>标注员工作统计监控</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <h1>标注员工作统计监控</h1>
+      <span class="sub">数据来源：data-platform.synapath.com · 组织 HC</span>
+    </div>
+    <div class="status" id="statusBar">
+      <span class="dot" id="statusDot"></span>
+      <span id="statusText">加载中...</span>
+      <span class="user-badge" id="userBadge"></span>
+      <button class="logout-btn" id="logoutBtn">登出</button>
+    </div>
+  </header>
+
+  <main class="container">
+    <!-- 控制面板 -->
+    <section class="panel controls">
+      <div class="ranges" id="rangeBtns">
+        <button data-range="1d">最近1天</button>
+        <button data-range="3d">最近3天</button>
+        <button data-range="1w" class="active">最近1周</button>
+        <button data-range="15d">最近15天</button>
+        <button data-range="1m">最近1月</button>
+      </div>
+      <div class="custom">
+        <input type="date" id="startDate" />
+        <span>至</span>
+        <input type="date" id="endDate" />
+        <button id="applyCustom">查询</button>
+      </div>
+      <div class="search-box">
+        <input type="text" id="searchInput" placeholder="按标注员名称搜索..." />
+      </div>
+      <div class="actions">
+        <button id="exportBtn" class="btn-secondary">导出CSV</button>
+        <button id="refreshBtn" class="btn-secondary">刷新数据</button>
+      </div>
+    </section>
+
+    <!-- 图例 -->
+    <section class="legend">
+      <span class="legend-item"><i class="dot-red"></i>日均&lt;3h 预警</span>
+      <span class="legend-item"><i class="dot-blue"></i>3-5h 正常</span>
+      <span class="legend-item"><i class="dot-green"></i>&gt;5h 活跃</span>
+    </section>
+
+    <!-- 汇总表 -->
+    <section class="panel">
+      <div class="panel-head">
+        <h2>标注员汇总 <span id="rangeLabel" class="muted"></span></h2>
+        <span id="totalCount" class="muted"></span>
+      </div>
+      <div class="table-wrap">
+        <table id="summaryTable">
+          <thead>
+            <tr>
+              <th>标注员</th>
+              <th>原始时长(h)</th>
+              <th>片段时长(h)</th>
+              <th>无片段时长(h)</th>
+              <th>无片段等效(h)</th>
+              <th>结算参考(h)</th>
+              <th>累计参考(h)</th>
+              <th>日均时长(h)</th>
+              <th>活跃天数</th>
+              <th>状态</th>
+            </tr>
+          </thead>
+          <tbody id="summaryBody">
+            <tr><td colspan="10" class="empty">加载中...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <!-- 明细弹窗 -->
+  <div class="modal" id="detailModal">
+    <div class="modal-content">
+      <div class="modal-head">
+        <h2 id="detailTitle">每日明细</h2>
+        <button class="close" id="closeModal">&times;</button>
+      </div>
+      <div class="modal-meta" id="detailMeta"></div>
+      <div class="table-wrap">
+        <table id="detailTable">
+          <thead>
+            <tr>
+              <th>日期</th>
+              <th>原始时长(h)</th>
+              <th>片段时长(h)</th>
+              <th>无片段时长(h)</th>
+              <th>无片段等效(h)</th>
+              <th>结算参考(h)</th>
+              <th>累计参考(h)</th>
+            </tr>
+          </thead>
+          <tbody id="detailBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <footer class="footer">
+    <span id="footStatus"></span>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
