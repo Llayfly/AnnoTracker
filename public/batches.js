@@ -84,32 +84,18 @@ async function loadBatches() {
       `<span class="summary-chip ${statusClass[k] || ''}">${k}: ${v}</span>`
     ).join('') + `<span class="summary-chip" style="background:#f5f5f5;color:#616161;">合计: ${json.count}</span>`;
 
-    // 按分组分类
-    const groups = { HC: [], C: [], S: [], other: [] };
+    // 按日期分组（不按组织分组，按日期倒序）
+    const byDate = {};
     json.data.forEach((b) => {
-      const g = getGroup(b.annotator_label);
-      groups[g].push(b);
+      if (!byDate[b.date]) byDate[b.date] = [];
+      byDate[b.date].push(b);
     });
 
-    // 按日期分组（每组内）
     let html = '';
-    for (const [gkey, items] of Object.entries(groups)) {
-      if (!items.length) continue;
-      const cfg = groupConfig[gkey];
-      html += `<div class="section-title ${cfg.cls}">${cfg.title}（${items.length} 条）</div>`;
-
-      // 按日期分组
-      const byDate = {};
-      items.forEach((b) => {
-        if (!byDate[b.date]) byDate[b.date] = [];
-        byDate[b.date].push(b);
-      });
-
-      for (const [date, dayItems] of Object.entries(Object.keys(byDate).sort().reverse())) {
-        const dayBatches = byDate[dayItems] || byDate[date];
-        html += `<h3 style="margin:12px 0 6px;font-size:14px;color:#666;">${dayItems}</h3>`;
-        html += renderBatchTable(dayBatches);
-      }
+    const sortedDates = Object.keys(byDate).sort().reverse();
+    for (const date of sortedDates) {
+      html += `<h3 style="margin:12px 0 6px;font-size:14px;color:#666;">${date}（${byDate[date].length} 条）</h3>`;
+      html += renderBatchTable(byDate[date]);
     }
 
     listDiv.innerHTML = html || '<p class="empty">暂无批次记录</p>';

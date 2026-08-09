@@ -4,7 +4,19 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>标注员工作统计监控</title>
-  <link rel="stylesheet" href="style.css?v=20260802" />
+  <link rel="stylesheet" href="style.css?v=20260810" />
+  <style>
+    .group-section { margin-bottom: 24px; }
+    .group-title { font-size: 16px; font-weight: 700; margin: 16px 0 8px; padding: 8px 12px; border-radius: 6px; }
+    .group-hc { background: #e3f2fd; color: #1565c0; }
+    .group-c { background: #fce4ec; color: #c62828; }
+    .group-s { background: #f3e5f5; color: #6a1b9a; }
+    .group-other { background: #f5f5f5; color: #616161; }
+    .rank-cell { font-weight: 700; color: #666; text-align: center; }
+    .rank-1 { color: #d4a017; }
+    .rank-2 { color: #8a8a8a; }
+    .rank-3 { color: #b87333; }
+  </style>
 </head>
 <body>
   <header class="topbar">
@@ -65,29 +77,8 @@
         <h2>标注员汇总 <span id="rangeLabel" class="muted"></span></h2>
         <span id="totalCount" class="muted"></span>
       </div>
-      <div class="table-wrap">
-        <table id="summaryTable">
-          <thead>
-            <tr>
-              <th>标注员</th>
-              <th>原始时长(h)</th>
-              <th>新任务(h)</th>
-              <th>旧任务(h)</th>
-              <th>片段时长(h)</th>
-              <th>无片段(h)</th>
-              <th>无片段等效(h)</th>
-              <th>结算参考(h)</th>
-              <th>PASS占比</th>
-              <th>累计参考(h)</th>
-              <th>日均时长(h)</th>
-              <th>活跃天数</th>
-              <th>状态</th>
-            </tr>
-          </thead>
-          <tbody id="summaryBody">
-            <tr><td colspan="13" class="empty">加载中...</td></tr>
-          </tbody>
-        </table>
+      <div id="summaryContainer">
+        <p class="empty">加载中...</p>
       </div>
     </section>
   </main>
@@ -107,7 +98,6 @@
               <th>日期</th>
               <th>原始时长(h)</th>
               <th>新任务(h)</th>
-              <th>旧任务(h)</th>
               <th>片段时长(h)</th>
               <th>无片段(h)</th>
               <th>无片段等效(h)</th>
@@ -147,6 +137,6 @@
     <span id="footStatus"></span>
   </footer>
 
-  <script src="app.js?v=20260802"></script>
+  <script src="app.js?v=20260810"></script>
 </body>
 </html>

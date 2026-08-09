@@ -49,10 +49,25 @@ let useCustom = false;
 const $ = (id) => document.getElementById(id);
 const levelText = { red: '预警', blue: '正常', green: '活跃' };
 
-// ===== 汇总数据 =====
+// ===== 分组工具 =====
+function getGroup(label) {
+  if (label.startsWith('HC')) return 'HC';
+  if (label.startsWith('C')) return 'C';
+  if (label.startsWith('S')) return 'S';
+  return 'other';
+}
+
+const groupConfig = {
+  HC: { title: 'HC 组织', cls: 'group-hc' },
+  C: { title: 'C 组织', cls: 'group-c' },
+  S: { title: 'S 组织', cls: 'group-s' },
+  other: { title: '其他', cls: 'group-other' },
+};
+
+// ===== 汇总数据（按 HC/C/S 分组 + 排行） =====
 async function loadSummary() {
-  const body = $('summaryBody');
-  body.innerHTML = '<tr><td colspan="13" class="empty">加载中...</td></tr>';
+  const container = $('summaryContainer');
+  container.innerHTML = '<p class="empty">加载中...</p>';
   let url = '/api/summary?';
   if (useCustom) {
     url += `start=${$('startDate').value}&end=${$('endDate').value}`;
@@ -69,38 +84,77 @@ async function loadSummary() {
     $('rangeLabel').textContent = `（${json.range.start} 至 ${json.range.end}）`;
     $('totalCount').textContent = `共 ${json.count} 人`;
     if (!json.data.length) {
-      body.innerHTML = '<tr><td colspan="13" class="empty">暂无数据</td></tr>';
+      container.innerHTML = '<p class="empty">暂无数据</p>';
       return;
     }
-    body.innerHTML = json.data.map((r) => `
-      <tr class="row-${r.level}" data-label="${r.label}">
-        <td><strong>${r.label}</strong></td>
-        <td class="num">${r.raw_hours}</td>
-        <td class="num">${r.new_task_hours}</td>
-        <td class="num">${r.old_task_hours}</td>
-        <td class="num">${r.segment_hours}</td>
-        <td class="num">${r.no_clip_hours}</td>
-        <td class="num">${r.no_clip_equivalent_hours}</td>
-        <td class="num">${r.settlement_reference_hours}</td>
-        <td class="num">${r.pass_ratio}%</td>
-        <td class="num">${r.cumulative_reference_hours}</td>
-        <td class="num"><strong>${r.daily_avg_raw_hours}</strong></td>
-        <td class="num">${r.active_days}</td>
-        <td><span class="badge ${r.level}">${levelText[r.level]}</span></td>
-      </tr>
-    `).join('');
-    body.querySelectorAll('tr[data-label]').forEach((tr) => {
+
+    // 按 HC/C/S 分组
+    const groups = { HC: [], C: [], S: [], other: [] };
+    json.data.forEach((r) => {
+      const g = getGroup(r.label);
+      groups[g].push(r);
+    });
+
+    // 渲染每组表格（带排行）
+    let html = '';
+    for (const [gkey, items] of Object.entries(groups)) {
+      if (!items.length) continue;
+      const cfg = groupConfig[gkey];
+      html += `<div class="group-section">`;
+      html += `<div class="group-title ${cfg.cls}">${cfg.title}（${items.length} 人）</div>`;
+      html += `<div class="table-wrap"><table style="width:100%;font-size:13px;table-layout:fixed;border-collapse:collapse;">
+        <thead><tr>
+          <th style="width:40px;">排名</th>
+          <th>标注员</th>
+          <th>原始时长(h)</th>
+          <th>新任务(h)</th>
+          <th>片段时长(h)</th>
+          <th>无片段(h)</th>
+          <th>无片段等效(h)</th>
+          <th>结算参考(h)</th>
+          <th>PASS占比</th>
+          <th>累计参考(h)</th>
+          <th>日均(h)</th>
+          <th>活跃天</th>
+          <th>等级</th>
+        </tr></thead><tbody>`;
+
+      items.forEach((r, idx) => {
+        const rank = idx + 1;
+        const rankCls = rank <= 3 ? `rank-${rank}` : '';
+        html += `<tr class="row-${r.level}" data-label="${r.label}">
+          <td class="rank-cell ${rankCls}">${rank}</td>
+          <td><strong>${r.label}</strong></td>
+          <td class="num">${r.raw_hours}</td>
+          <td class="num">${r.new_task_hours}</td>
+          <td class="num">${r.segment_hours}</td>
+          <td class="num">${r.no_clip_hours}</td>
+          <td class="num">${r.no_clip_equivalent_hours}</td>
+          <td class="num">${r.settlement_reference_hours}</td>
+          <td class="num">${r.pass_ratio}%</td>
+          <td class="num">${r.cumulative_reference_hours}</td>
+          <td class="num"><strong>${r.daily_avg_raw_hours}</strong></td>
+          <td class="num">${r.active_days}</td>
+          <td><span class="badge ${r.level}">${levelText[r.level]}</span></td>
+        </tr>`;
+      });
+
+      html += '</tbody></table></div></div>';
+    }
+
+    container.innerHTML = html || '<p class="empty">暂无数据</p>';
+    container.querySelectorAll('tr[data-label]').forEach((tr) => {
       tr.addEventListener('click', () => openDetail(tr.dataset.label));
     });
   } catch (e) {
-    body.innerHTML = `<tr><td colspan="13" class="empty">加载失败: ${e.message}</td></tr>`;
+    container.innerHTML = `<p class="empty">加载失败: ${e.message}</p>`;
   }
 }
 
 // ===== 明细 =====
 async function openDetail(label) {
   $('detailTitle').textContent = `${label} 每日明细`;
-  $('detailBody').innerHTML = '<tr><td colspan="10" class="empty">加载中...</td></tr>';
+  $('detailBody').innerHTML = '<tr><td colspan="9" class="empty">加载中...</td></tr>';
   $('detailModal').classList.add('show');
   let url = `/api/detail/${encodeURIComponent(label)}?`;
   if (useCustom) {
@@ -115,7 +169,7 @@ async function openDetail(label) {
     $('detailMeta').textContent =
       `原始标签: ${json.raw_label} · 平台累计参考: ${json.cumulative_reference_alltime_hours} h`;
     if (!json.daily.length) {
-      $('detailBody').innerHTML = '<tr><td colspan="10" class="empty">该区间暂无数据</td></tr>';
+      $('detailBody').innerHTML = '<tr><td colspan="9" class="empty">该区间暂无数据</td></tr>';
       return;
     }
     $('detailBody').innerHTML = json.daily.map((d) => `
@@ -123,7 +177,6 @@ async function openDetail(label) {
         <td>${d.date}</td>
         <td class="num">${d.raw_hours}</td>
         <td class="num">${d.new_task_hours}</td>
-        <td class="num">${d.old_task_hours}</td>
         <td class="num">${d.segment_hours}</td>
         <td class="num">${d.no_clip_hours}</td>
         <td class="num">${d.no_clip_equivalent_hours}</td>
@@ -133,7 +186,7 @@ async function openDetail(label) {
       </tr>
     `).join('');
   } catch (e) {
-    $('detailBody').innerHTML = `<tr><td colspan="10" class="empty">加载失败: ${e.message}</td></tr>`;
+    $('detailBody').innerHTML = `<tr><td colspan="9" class="empty">加载失败: ${e.message}</td></tr>`;
   }
 }
 
