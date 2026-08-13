@@ -55,7 +55,6 @@ module.exports = requireAuth(async (req, res) => {
       LEFT JOIN annotator_cumulative ac ON ac.annotator_id = a.id
       WHERE a.label LIKE ?
       GROUP BY a.id
-      HAVING active_days > 0
       ORDER BY raw_seconds DESC`,
       args: [start, end, search],
     });

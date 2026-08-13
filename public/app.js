@@ -88,14 +88,17 @@ async function loadSummary() {
       return;
     }
 
-    // 按 HC/C/S 分组
+    // 先分配全局排名（所有组织一起排序）
+    json.data.forEach((r, i) => { r._rank = i + 1; });
+
+    // 按 HC/C/S 分组（保留全局排名）
     const groups = { HC: [], C: [], S: [], other: [] };
     json.data.forEach((r) => {
       const g = getGroup(r.label);
       groups[g].push(r);
     });
 
-    // 渲染每组表格（带排行）
+    // 渲染每组表格（显示全局排名）
     let html = '';
     for (const [gkey, items] of Object.entries(groups)) {
       if (!items.length) continue;
@@ -119,8 +122,8 @@ async function loadSummary() {
           <th>等级</th>
         </tr></thead><tbody>`;
 
-      items.forEach((r, idx) => {
-        const rank = idx + 1;
+      items.forEach((r) => {
+        const rank = r._rank;
         const rankCls = rank <= 3 ? `rank-${rank}` : '';
         html += `<tr class="row-${r.level}" data-label="${r.label}">
           <td class="rank-cell ${rankCls}">${rank}</td>
