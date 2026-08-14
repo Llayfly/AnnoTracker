@@ -30,12 +30,25 @@ function getRange(query) {
   return { start, end };
 }
 
+// 计算日期范围内的工作日天数（周一至周五）
+function countWorkingDays(startStr, endStr) {
+  const start = new Date(startStr + 'T00:00:00');
+  const end = new Date(endStr + 'T00:00:00');
+  let count = 0;
+  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+    const day = d.getDay();
+    if (day !== 0 && day !== 6) count++;
+  }
+  return count;
+}
+
 module.exports = requireAuth(async (req, res) => {
   try {
     await ensureInit();
     const db = getDb();
     const { start, end } = getRange(req.query);
     const search = req.query.search ? `%${req.query.search.trim()}%` : '%';
+    const workingDays = countWorkingDays(start, end);
 
     const result = await db.execute({
       sql: `SELECT
@@ -65,8 +78,8 @@ module.exports = requireAuth(async (req, res) => {
       '日均新任务(h)', '活跃天数', '预警等级'];
     const lines = [header.join(',')];
     for (const r of result.rows) {
-      // 日均只按新任务计算（蓝色部分），不包含旧任务
-      const avg = r.active_days > 0 ? Number(r.new_task_raw_seconds) / r.active_days / SEC_PER_HOUR : 0;
+      // 日均 = 新任务总时长 / 工作日天数（周一至周五）
+      const avg = workingDays > 0 ? Number(r.new_task_raw_seconds) / workingDays / SEC_PER_HOUR : 0;
       const passRatio = Number(r.raw_seconds) > 0
         ? Math.round((Number(r.segment_seconds) / Number(r.raw_seconds)) * 1000) / 10
         : 0;

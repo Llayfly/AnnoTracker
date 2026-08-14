@@ -37,12 +37,25 @@ function getLevel(h) {
   return 'green';
 }
 
+// 计算日期范围内的工作日天数（周一至周五）
+function countWorkingDays(startStr, endStr) {
+  const start = new Date(startStr + 'T00:00:00');
+  const end = new Date(endStr + 'T00:00:00');
+  let count = 0;
+  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+    const day = d.getDay(); // 0=周日, 6=周六
+    if (day !== 0 && day !== 6) count++;
+  }
+  return count;
+}
+
 module.exports = requireAuth(async (req, res) => {
   try {
     await ensureInit();
     const db = getDb();
     const { start, end } = getRange(req.query);
     const search = req.query.search ? `%${req.query.search.trim()}%` : '%';
+    const workingDays = countWorkingDays(start, end);
 
     // 使用 annotator_cumulative 表获取真实累计值，而非从 daily_stats 累加
     const result = await db.execute({
@@ -68,8 +81,8 @@ module.exports = requireAuth(async (req, res) => {
     });
 
     const data = result.rows.map((r) => {
-      // 日均只按新任务计算（蓝色部分），不包含旧任务
-      const dailyAvgRawHours = r.active_days > 0 ? Number(r.new_task_raw_seconds) / r.active_days / SEC_PER_HOUR : 0;
+      // 日均 = 新任务总时长 / 工作日天数（周一至周五）
+      const dailyAvgRawHours = workingDays > 0 ? Number(r.new_task_raw_seconds) / workingDays / SEC_PER_HOUR : 0;
       const passRatio = Number(r.raw_seconds) > 0
         ? Math.round((Number(r.segment_seconds) / Number(r.raw_seconds)) * 1000) / 10
         : 0;
