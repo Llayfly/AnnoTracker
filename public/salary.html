@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>薪资计算</title>
+  <link rel="stylesheet" href="style.css?v=20260810" />
+  <style>
+    .salary-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    .salary-table th, .salary-table td { padding: 8px 10px; text-align: right; border-bottom: 1px solid #eee; font-size: 13px; }
+    .salary-table th { background: #f5f5f5; font-weight: 600; color: #333; white-space: nowrap; }
+    .salary-table td:first-child, .salary-table th:first-child { text-align: left; }
+    .salary-table tr.priority-row { background: #fff8e1; }
+    .salary-table tr.priority-row td:first-child::before { content: '★ '; color: #f57f17; }
+    .salary-table tr:hover { background: #f0f7ff; }
+    .salary-table .num { font-variant-numeric: tabular-nums; }
+    .salary-table .salary-high { color: #2e7d32; font-weight: 700; }
+    .salary-table .salary-low { color: #999; }
+    .salary-table .total-row { background: #e8eaf6; font-weight: 700; }
+    .salary-table .total-row td { border-top: 2px solid #7986cb; }
+    .group-section { margin-bottom: 28px; }
+    .group-title { font-size: 17px; font-weight: 700; margin: 20px 0 10px; padding: 10px 14px; border-radius: 6px; display: flex; align-items: center; gap: 8px; }
+    .group-hc { background: #e3f2fd; color: #1565c0; }
+    .group-c { background: #fce4ec; color: #c62828; }
+    .group-s { background: #f3e5f5; color: #6a1b9a; }
+    .group-other { background: #f5f5f5; color: #616161; }
+    .group-count { font-size: 13px; font-weight: 400; opacity: 0.8; }
+    .salary-summary { display: flex; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
+    .summary-card { flex: 1; min-width: 200px; padding: 14px 18px; border-radius: 8px; background: #f5f5f5; }
+    .summary-card .label { font-size: 12px; color: #666; margin-bottom: 4px; }
+    .summary-card .value { font-size: 22px; font-weight: 700; color: #111; }
+    .summary-card .value.green { color: #2e7d32; }
+    .summary-card .value.blue { color: #1565c0; }
+    .legend-box { font-size: 12px; color: #666; margin-bottom: 16px; padding: 10px 14px; background: #fafafa; border-radius: 6px; line-height: 1.8; }
+    .legend-box strong { color: #333; }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <h1>薪资计算</h1>
+      <span class="sub">方式一：原始时长阶梯计价 · 方式二：结算参考 32/h</span>
+    </div>
+    <div class="status" id="statusBar">
+      <span class="dot" id="statusDot"></span>
+      <span id="statusText">加载中...</span>
+      <span class="user-badge" id="userBadge"></span>
+      <button class="logout-btn" id="logoutBtn">登出</button>
+    </div>
+  </header>
+
+  <main class="container">
+    <!-- 导航 -->
+    <div class="nav-tabs" style="display:flex;gap:0;margin-bottom:20px;border-bottom:2px solid #e0e0e0;">
+      <a href="/" style="padding:10px 24px;text-decoration:none;color:#666;font-weight:600;border-bottom:3px solid transparent;margin-bottom:-2px;">统计监控</a>
+      <a href="/batches" style="padding:10px 24px;text-decoration:none;color:#666;font-weight:600;border-bottom:3px solid transparent;margin-bottom:-2px;">批次管理</a>
+      <a href="/salary" style="padding:10px 24px;text-decoration:none;color:#111;font-weight:600;border-bottom:3px solid #111;margin-bottom:-2px;">薪资计算</a>
+    </div>
+
+    <!-- 控制面板 -->
+    <section class="panel controls">
+      <div class="custom">
+        <label style="font-size:13px;color:#666;">起始日期</label>
+        <input type="date" id="startDate" />
+        <span>至</span>
+        <label style="font-size:13px;color:#666;">结束日期</label>
+        <input type="date" id="endDate" />
+        <button id="applyBtn">查询</button>
+        <button id="thisMonthBtn" class="btn-secondary">本月</button>
+      </div>
+    </section>
+
+    <!-- 计算规则说明 -->
+    <div class="legend-box">
+      <strong>方式一（按原始时长）：</strong>阶梯累计 — 0~130h 按 16元/h · 130~182h 按 19元/h · 超出182h 按 21.8元/h<br/>
+      <strong>方式二（按结算参考）：</strong>结算参考时长 × 32元/h（推荐）<br/>
+      <strong>结算参考</strong> = PASS片段时长 + 无片段等效时长（无片段系数 0.2）<br/>
+      <strong>★</strong> 标记为优先关注标注员 · <strong>绿色加粗</strong>为推荐方式（薪资更高）
+    </div>
+
+    <!-- 汇总卡片 -->
+    <div class="salary-summary" id="summaryCards">
+      <div class="summary-card"><div class="label">总人数</div><div class="value" id="totalCount">-</div></div>
+      <div class="summary-card"><div class="label">方式一总薪资</div><div class="value blue" id="totalSalaryRaw">-</div></div>
+      <div class="summary-card"><div class="label">方式二总薪资</div><div class="value green" id="totalSalarySettlement">-</div></div>
+    </div>
+
+    <!-- 薪资表格 -->
+    <div id="salaryContainer">
+      <p class="empty">加载中...</p>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <span id="footStatus"></span>
+  </footer>
+
+  <script src="salary.js?v=20260815"></script>
+</body>
+</html>
