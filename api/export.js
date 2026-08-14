@@ -62,10 +62,11 @@ module.exports = requireAuth(async (req, res) => {
     const levelText = (h) => (h < 3 ? '红色预警' : h <= 5 ? '蓝色正常' : '绿色活跃');
     const header = ['标注员', '原始时长(h)', '新任务(h)', '片段时长(h)', 'PASS片段(h)',
       '无片段时长(h)', '无片段等效(h)', '结算参考(h)', 'PASS占比(%)', '累计参考(h)',
-      '日均原始时长(h)', '活跃天数', '预警等级'];
+      '日均新任务(h)', '活跃天数', '预警等级'];
     const lines = [header.join(',')];
     for (const r of result.rows) {
-      const avg = r.active_days > 0 ? Number(r.raw_seconds) / r.active_days / SEC_PER_HOUR : 0;
+      // 日均只按新任务计算（蓝色部分），不包含旧任务
+      const avg = r.active_days > 0 ? Number(r.new_task_raw_seconds) / r.active_days / SEC_PER_HOUR : 0;
       const passRatio = Number(r.raw_seconds) > 0
         ? Math.round((Number(r.segment_seconds) / Number(r.raw_seconds)) * 1000) / 10
         : 0;

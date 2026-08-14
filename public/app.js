@@ -117,7 +117,7 @@ async function loadSummary() {
           <th>结算参考(h)</th>
           <th>PASS占比</th>
           <th>累计参考(h)</th>
-          <th>日均(h)</th>
+          <th>日均新任务(h)</th>
           <th>活跃天</th>
           <th>等级</th>
         </tr></thead><tbody>`;

@@ -68,7 +68,8 @@ module.exports = requireAuth(async (req, res) => {
     });
 
     const data = result.rows.map((r) => {
-      const dailyAvgRawHours = r.active_days > 0 ? Number(r.raw_seconds) / r.active_days / SEC_PER_HOUR : 0;
+      // 日均只按新任务计算（蓝色部分），不包含旧任务
+      const dailyAvgRawHours = r.active_days > 0 ? Number(r.new_task_raw_seconds) / r.active_days / SEC_PER_HOUR : 0;
       const passRatio = Number(r.raw_seconds) > 0
         ? Math.round((Number(r.segment_seconds) / Number(r.raw_seconds)) * 1000) / 10
         : 0;
