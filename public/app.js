@@ -139,6 +139,33 @@ async function loadSummary() {
         </tr>`;
       });
 
+      // 组织合计
+      const sum = (key) => items.reduce((s, r) => s + (Number(r[key]) || 0), 0);
+      const totRaw = sum('raw_hours');
+      const totNew = sum('new_task_hours');
+      const totSeg = sum('segment_hours');
+      const totNoClip = sum('no_clip_hours');
+      const totNoEq = sum('no_clip_equivalent_hours');
+      const totSettl = sum('settlement_reference_hours');
+      const totCum = sum('cumulative_reference_hours');
+      const totDays = sum('active_days');
+      const avgPass = totRaw > 0 ? Math.round(totSeg / totRaw * 1000) / 10 : 0;
+      const r2 = (n) => Math.round(n * 1000) / 1000;
+      html += `<tr style="background:#f0f0f0;font-weight:700;border-top:2px solid #999;">
+        <td></td>
+        <td>${gkey} 合计</td>
+        <td class="num">${r2(totRaw)}</td>
+        <td class="num">${r2(totNew)}</td>
+        <td class="num">${r2(totSeg)}</td>
+        <td class="num">${r2(totNoClip)}</td>
+        <td class="num">${r2(totNoEq)}</td>
+        <td class="num">${r2(totSettl)}</td>
+        <td class="num">${avgPass}%</td>
+        <td class="num">${r2(totCum)}</td>
+        <td class="num">${r2(totNew > 0 && totDays > 0 ? totNew / (Math.max(...items.map(i => i.active_days)) || 1) : 0)}</td>
+        <td class="num">${totDays}</td>
+      </tr>`;
+
       html += '</tbody></table></div></div>';
     }
 
