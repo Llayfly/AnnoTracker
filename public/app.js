@@ -47,20 +47,19 @@ let currentRange = '1w';
 let useCustom = false;
 
 const $ = (id) => document.getElementById(id);
-const levelText = { red: '预警', blue: '正常', green: '活跃' };
 
 // ===== 分组工具 =====
 function getGroup(label) {
+  if (label.startsWith('HBHC')) return 'HBHC';
   if (label.startsWith('HC')) return 'HC';
   if (label.startsWith('C')) return 'C';
-  if (label.startsWith('S')) return 'S';
   return 'other';
 }
 
 const groupConfig = {
   HC: { title: 'HC 组织', cls: 'group-hc' },
   C: { title: 'C 组织', cls: 'group-c' },
-  S: { title: 'S 组织', cls: 'group-s' },
+  HBHC: { title: 'HBHC 组织', cls: 'group-hbhc' },
   other: { title: '其他', cls: 'group-other' },
 };
 
@@ -91,8 +90,8 @@ async function loadSummary() {
     // 先分配全局排名（所有组织一起排序）
     json.data.forEach((r, i) => { r._rank = i + 1; });
 
-    // 按 HC/C/S 分组（保留全局排名）
-    const groups = { HC: [], C: [], S: [], other: [] };
+    // 按 HC/C/HBHC/其他 分组（保留全局排名）
+    const groups = { HC: [], C: [], HBHC: [], other: [] };
     json.data.forEach((r) => {
       const g = getGroup(r.label);
       groups[g].push(r);
@@ -119,13 +118,12 @@ async function loadSummary() {
           <th>累计参考(h)</th>
           <th>日均新任务(h)</th>
           <th>活跃天</th>
-          <th>等级</th>
         </tr></thead><tbody>`;
 
       items.forEach((r) => {
         const rank = r._rank;
         const rankCls = rank <= 3 ? `rank-${rank}` : '';
-        html += `<tr class="row-${r.level}" data-label="${r.label}">
+        html += `<tr data-label="${r.label}">
           <td class="rank-cell ${rankCls}">${rank}</td>
           <td><strong>${r.label}</strong></td>
           <td class="num">${r.raw_hours}</td>
@@ -138,7 +136,6 @@ async function loadSummary() {
           <td class="num">${r.cumulative_reference_hours}</td>
           <td class="num"><strong>${r.daily_avg_raw_hours}</strong></td>
           <td class="num">${r.active_days}</td>
-          <td><span class="badge ${r.level}">${levelText[r.level]}</span></td>
         </tr>`;
       });
 
