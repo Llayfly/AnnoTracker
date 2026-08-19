@@ -57,11 +57,11 @@ module.exports = requireAuth(async (req, res) => {
     const search = req.query.search ? `%${req.query.search.trim()}%` : '%';
     const workingDays = countWorkingDays(start, end);
 
-    // 使用 annotator_cumulative 表获取真实累计值，而非从 daily_stats 累加
+    // 原始时长 = 每天新任务时长的累加（不含旧任务）
     const result = await db.execute({
       sql: `SELECT
         a.id, a.label, a.raw_label,
-        COALESCE(SUM(d.raw_seconds),0) AS raw_seconds,
+        COALESCE(SUM(d.new_task_raw_seconds),0) AS raw_seconds,
         COALESCE(SUM(d.new_task_raw_seconds),0) AS new_task_raw_seconds,
         COALESCE(SUM(d.old_task_raw_seconds),0) AS old_task_raw_seconds,
         COALESCE(SUM(d.segment_seconds),0) AS segment_seconds,

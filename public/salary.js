@@ -35,7 +35,7 @@ if (currentUser) {
 
 const $ = (id) => document.getElementById(id);
 
-const GROUP_TITLES = { HC: 'HC 组织', C: 'C 组织', S: 'S 组织', OTHER: '其他' };
+const GROUP_TITLES = { HC: 'HC 组织', C: 'C 组织', HBHC: 'HBHC 组织', S: 'S 组织', JS: 'JS 组织', OTHER: '其他' };
 
 function renderGroup(groupKey, rows) {
   if (!rows.length) return '';
@@ -126,8 +126,10 @@ async function loadSalary() {
 
     let totalRaw = 0, totalSettlement = 0;
     const groups = json.groups;
-    for (const key of ['HC', 'C', 'S', 'OTHER']) {
+    const search = ($('searchInput') ? $('searchInput').value.trim().toLowerCase() : '');
+    for (const key of ['HC', 'C', 'HBHC', 'S', 'JS', 'OTHER']) {
       for (const r of groups[key]) {
+        if (search && !r.label.toLowerCase().includes(search)) continue;
         totalRaw += r.salary_raw;
         totalSettlement += r.salary_settlement;
       }
@@ -136,9 +138,15 @@ async function loadSalary() {
     $('totalSalarySettlement').textContent = `¥${Math.round(totalSettlement * 100) / 100}`;
 
     let html = '';
-    for (const key of ['HC', 'C', 'S', 'OTHER']) {
+    for (const key of ['HC', 'C', 'HBHC', 'S', 'JS', 'OTHER']) {
       if (groups[key] && groups[key].length) {
-        html += renderGroup(key, groups[key]);
+        let filtered = groups[key];
+        if (search) {
+          filtered = filtered.filter(r => r.label.toLowerCase().includes(search));
+        }
+        if (filtered.length) {
+          html += renderGroup(key, filtered);
+        }
       }
     }
     container.innerHTML = html || '<p class="empty">暂无数据</p>';
@@ -158,6 +166,16 @@ function setThisMonth() {
 $('applyBtn').addEventListener('click', loadSalary);
 $('thisMonthBtn').addEventListener('click', () => { setThisMonth(); loadSalary(); });
 $('logoutBtn').addEventListener('click', redirectToLogin);
+
+// 搜索框：输入时延迟触发查询
+let searchTimer;
+const searchInput = $('searchInput');
+if (searchInput) {
+  searchInput.addEventListener('input', () => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(loadSalary, 350);
+  });
+}
 
 // 初始化：默认本月
 setThisMonth();

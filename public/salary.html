@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>薪资计算</title>
-  <link rel="stylesheet" href="style.css?v=20260810" />
+  <link rel="stylesheet" href="style.css?v=20260819a" />
   <style>
     .salary-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
     .salary-table th, .salary-table td { padding: 8px 10px; text-align: right; border-bottom: 1px solid #eee; font-size: 13px; }
@@ -22,7 +22,9 @@
     .group-title { font-size: 17px; font-weight: 700; margin: 20px 0 10px; padding: 10px 14px; border-radius: 6px; display: flex; align-items: center; gap: 8px; }
     .group-hc { background: #e3f2fd; color: #1565c0; }
     .group-c { background: #fce4ec; color: #c62828; }
+    .group-hbhc { background: #e8f5e9; color: #2e7d32; }
     .group-s { background: #f3e5f5; color: #6a1b9a; }
+    .group-js { background: #fff3e0; color: #e65100; }
     .group-other { background: #f5f5f5; color: #616161; }
     .group-count { font-size: 13px; font-weight: 400; opacity: 0.8; }
     .salary-summary { display: flex; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
@@ -68,6 +70,9 @@
         <button id="applyBtn">查询</button>
         <button id="thisMonthBtn" class="btn-secondary">本月</button>
       </div>
+      <div class="search-box">
+        <input type="text" id="searchInput" placeholder="搜索标注员编号..." style="padding:7px 12px;border:1px solid var(--border);border-radius:7px;width:220px;font-size:13px;" />
+      </div>
     </section>
 
     <!-- 计算规则说明 -->
@@ -95,6 +100,6 @@
     <span id="footStatus"></span>
   </footer>
 
-  <script src="salary.js?v=20260815"></script>
+  <script src="salary.js?v=20260819a"></script>
 </body>
 </html>

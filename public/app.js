@@ -52,6 +52,8 @@ const $ = (id) => document.getElementById(id);
 function getGroup(label) {
   if (label.startsWith('HBHC')) return 'HBHC';
   if (label.startsWith('HC')) return 'HC';
+  if (label.startsWith('JS')) return 'JS';
+  if (label.startsWith('S')) return 'S';
   if (label.startsWith('C')) return 'C';
   return 'other';
 }
@@ -60,6 +62,8 @@ const groupConfig = {
   HC: { title: 'HC 组织', cls: 'group-hc' },
   C: { title: 'C 组织', cls: 'group-c' },
   HBHC: { title: 'HBHC 组织', cls: 'group-hbhc' },
+  S: { title: 'S 组织', cls: 'group-s' },
+  JS: { title: 'JS 组织', cls: 'group-js' },
   other: { title: '其他', cls: 'group-other' },
 };
 
@@ -90,8 +94,8 @@ async function loadSummary() {
     // 先分配全局排名（所有组织一起排序）
     json.data.forEach((r, i) => { r._rank = i + 1; });
 
-    // 按 HC/C/HBHC/其他 分组（保留全局排名）
-    const groups = { HC: [], C: [], HBHC: [], other: [] };
+    // 按 HC/C/HBHC/S/JS/其他 分组（保留全局排名）
+    const groups = { HC: [], C: [], HBHC: [], S: [], JS: [], other: [] };
     json.data.forEach((r) => {
       const g = getGroup(r.label);
       groups[g].push(r);

@@ -47,11 +47,13 @@ function calcSettlementSalary(settlementHours) {
   return Math.round(settlementHours * 32 * 100) / 100;
 }
 
-// 分组：HC / C / S / 其他
+// 分组：HC / C / HBHC / S / JS / 其他
 function getGroup(label) {
+  if (label.startsWith('HBHC')) return 'HBHC';
   if (label.startsWith('HC')) return 'HC';
-  if (label.startsWith('C')) return 'C';
+  if (label.startsWith('JS')) return 'JS';
   if (label.startsWith('S')) return 'S';
+  if (label.startsWith('C')) return 'C';
   return 'OTHER';
 }
 
@@ -64,10 +66,11 @@ module.exports = requireAuth(async (req, res) => {
     const db = getDb();
     const { start, end } = getMonthRange(req.query);
 
+    // 原始时长 = 每天新任务时长的累加（不含旧任务）
     const result = await db.execute({
       sql: `SELECT
         a.id, a.label,
-        COALESCE(SUM(d.raw_seconds), 0) AS raw_seconds,
+        COALESCE(SUM(d.new_task_raw_seconds), 0) AS raw_seconds,
         COALESCE(SUM(d.settlement_reference_seconds), 0) AS settlement_seconds,
         COALESCE(SUM(d.new_task_raw_seconds), 0) AS new_task_seconds,
         COUNT(d.date) AS active_days
@@ -101,7 +104,7 @@ module.exports = requireAuth(async (req, res) => {
     });
 
     // 分组
-    const groups = { HC: [], C: [], S: [], OTHER: [] };
+    const groups = { HC: [], C: [], HBHC: [], S: [], JS: [], OTHER: [] };
     for (const r of rows) {
       groups[r.group].push(r);
     }

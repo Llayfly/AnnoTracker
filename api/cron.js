@@ -2,6 +2,7 @@
 // GET /api/cron —— 定时采集端点
 // 供 Vercel Cron 或外部 cron-job.org 调用，通过 CRON_SECRET 密钥验证，无需 JWT 登录
 const { collectToday, collectBatches } = require('../lib/collector');
+const { ensureInit, migrateLabels } = require('../lib/db');
 
 module.exports = async (req, res) => {
   const secret = process.env.CRON_SECRET;
@@ -17,6 +18,8 @@ module.exports = async (req, res) => {
     return res.status(401).json({ error: '密钥无效' });
   }
   try {
+    await ensureInit();
+    await migrateLabels();
     const count = await collectToday();
     // 同时采集批次数据（失败不影响主流程）
     let batchResult = null;
