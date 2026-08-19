@@ -47,13 +47,14 @@ function calcSettlementSalary(settlementHours) {
   return Math.round(settlementHours * 32 * 100) / 100;
 }
 
-// 分组：HC / C / HBHC / S / JS / 其他
+// 分组：HC / C / HBHC / S / JS / 其他（大小写不敏感）
 function getGroup(label) {
-  if (label.startsWith('HBHC')) return 'HBHC';
-  if (label.startsWith('HC')) return 'HC';
-  if (label.startsWith('JS')) return 'JS';
-  if (label.startsWith('S')) return 'S';
-  if (label.startsWith('C')) return 'C';
+  const u = label.toUpperCase();
+  if (u.startsWith('HBHC')) return 'HBHC';
+  if (u.startsWith('HC')) return 'HC';
+  if (u.startsWith('JS')) return 'JS';
+  if (u.startsWith('S')) return 'S';
+  if (u.startsWith('C')) return 'C';
   return 'OTHER';
 }
 
@@ -73,6 +74,7 @@ module.exports = requireAuth(async (req, res) => {
         COALESCE(SUM(d.new_task_raw_seconds), 0) AS raw_seconds,
         COALESCE(SUM(d.settlement_reference_seconds), 0) AS settlement_seconds,
         COALESCE(SUM(d.new_task_raw_seconds), 0) AS new_task_seconds,
+        COALESCE(SUM(d.old_task_raw_seconds), 0) AS old_task_seconds,
         COUNT(d.date) AS active_days
       FROM annotators a
       LEFT JOIN daily_stats d ON d.annotator_id = a.id AND d.date >= ? AND d.date <= ?
@@ -86,6 +88,7 @@ module.exports = requireAuth(async (req, res) => {
       const rawHours = s2h(r.raw_seconds);
       const settlementHours = s2h(r.settlement_seconds);
       const newTaskHours = s2h(r.new_task_seconds);
+      const oldTaskHours = s2h(r.old_task_seconds);
       const salary1 = calcRawSalary(rawHours);
       const salary2 = calcSettlementSalary(settlementHours);
       return {
@@ -93,6 +96,7 @@ module.exports = requireAuth(async (req, res) => {
         raw_hours: rawHours,
         settlement_hours: settlementHours,
         new_task_hours: newTaskHours,
+        old_task_hours: oldTaskHours,
         active_days: r.active_days,
         salary_raw: salary1,
         salary_settlement: salary2,

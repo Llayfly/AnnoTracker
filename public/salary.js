@@ -55,7 +55,7 @@ function renderGroup(groupKey, rows) {
         <td class="num">${r.raw_hours}</td>
         <td class="num">${r.settlement_hours}</td>
         <td class="num">${r.new_task_hours}</td>
-        <td class="num">${r.active_days}</td>
+        <td class="num">${r.old_task_hours}</td>
         <td class="num ${rawClass}">¥${r.salary_raw}</td>
         <td class="num ${settleClass}">¥${r.salary_settlement}</td>
         <td class="num" style="color:${r.salary_diff >= 0 ? '#2e7d32' : '#c62828'};">
@@ -78,7 +78,7 @@ function renderGroup(groupKey, rows) {
               <th>原始时长(h)</th>
               <th>结算参考(h)</th>
               <th>新任务(h)</th>
-              <th>活跃天</th>
+              <th>旧任务(h)</th>
               <th>方式一<br/><small>原始阶梯</small></th>
               <th>方式二<br/><small>结算32/h</small></th>
               <th>差额<br/><small>二-一</small></th>

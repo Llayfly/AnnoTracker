@@ -48,13 +48,14 @@ let useCustom = false;
 
 const $ = (id) => document.getElementById(id);
 
-// ===== 分组工具 =====
+// ===== 分组工具（大小写不敏感）=====
 function getGroup(label) {
-  if (label.startsWith('HBHC')) return 'HBHC';
-  if (label.startsWith('HC')) return 'HC';
-  if (label.startsWith('JS')) return 'JS';
-  if (label.startsWith('S')) return 'S';
-  if (label.startsWith('C')) return 'C';
+  const u = label.toUpperCase();
+  if (u.startsWith('HBHC')) return 'HBHC';
+  if (u.startsWith('HC')) return 'HC';
+  if (u.startsWith('JS')) return 'JS';
+  if (u.startsWith('S')) return 'S';
+  if (u.startsWith('C')) return 'C';
   return 'other';
 }
 
@@ -114,14 +115,11 @@ async function loadSummary() {
           <th>标注员</th>
           <th>原始时长(h)</th>
           <th>新任务(h)</th>
+          <th>旧任务(h)</th>
           <th>片段时长(h)</th>
-          <th>无片段(h)</th>
-          <th>无片段等效(h)</th>
-          <th>结算参考(h)</th>
           <th>PASS占比</th>
           <th>累计参考(h)</th>
           <th>日均新任务(h)</th>
-          <th>活跃天</th>
         </tr></thead><tbody>`;
 
       items.forEach((r) => {
@@ -132,14 +130,11 @@ async function loadSummary() {
           <td><strong>${r.label}</strong></td>
           <td class="num">${r.raw_hours}</td>
           <td class="num">${r.new_task_hours}</td>
+          <td class="num">${r.old_task_hours}</td>
           <td class="num">${r.segment_hours}</td>
-          <td class="num">${r.no_clip_hours}</td>
-          <td class="num">${r.no_clip_equivalent_hours}</td>
-          <td class="num">${r.settlement_reference_hours}</td>
           <td class="num">${r.pass_ratio}%</td>
           <td class="num">${r.cumulative_reference_hours}</td>
           <td class="num"><strong>${r.daily_avg_raw_hours}</strong></td>
-          <td class="num">${r.active_days}</td>
         </tr>`;
       });
 
@@ -147,10 +142,8 @@ async function loadSummary() {
       const sum = (key) => items.reduce((s, r) => s + (Number(r[key]) || 0), 0);
       const totRaw = sum('raw_hours');
       const totNew = sum('new_task_hours');
+      const totOld = sum('old_task_hours');
       const totSeg = sum('segment_hours');
-      const totNoClip = sum('no_clip_hours');
-      const totNoEq = sum('no_clip_equivalent_hours');
-      const totSettl = sum('settlement_reference_hours');
       const totCum = sum('cumulative_reference_hours');
       const totDays = sum('active_days');
       const avgPass = totRaw > 0 ? Math.round(totSeg / totRaw * 1000) / 10 : 0;
@@ -160,14 +153,11 @@ async function loadSummary() {
         <td>${gkey} 合计</td>
         <td class="num">${r2(totRaw)}</td>
         <td class="num">${r2(totNew)}</td>
+        <td class="num">${r2(totOld)}</td>
         <td class="num">${r2(totSeg)}</td>
-        <td class="num">${r2(totNoClip)}</td>
-        <td class="num">${r2(totNoEq)}</td>
-        <td class="num">${r2(totSettl)}</td>
         <td class="num">${avgPass}%</td>
         <td class="num">${r2(totCum)}</td>
         <td class="num">${r2(totNew > 0 && totDays > 0 ? totNew / (Math.max(...items.map(i => i.active_days)) || 1) : 0)}</td>
-        <td class="num">${totDays}</td>
       </tr>`;
 
       html += '</tbody></table></div></div>';
@@ -185,7 +175,7 @@ async function loadSummary() {
 // ===== 明细 =====
 async function openDetail(label) {
   $('detailTitle').textContent = `${label} 每日明细`;
-  $('detailBody').innerHTML = '<tr><td colspan="9" class="empty">加载中...</td></tr>';
+  $('detailBody').innerHTML = '<tr><td colspan="7" class="empty">加载中...</td></tr>';
   $('detailModal').classList.add('show');
   let url = `/api/detail/${encodeURIComponent(label)}?`;
   if (useCustom) {
@@ -200,7 +190,7 @@ async function openDetail(label) {
     $('detailMeta').textContent =
       `原始标签: ${json.raw_label} · 平台累计参考: ${json.cumulative_reference_alltime_hours} h`;
     if (!json.daily.length) {
-      $('detailBody').innerHTML = '<tr><td colspan="9" class="empty">该区间暂无数据</td></tr>';
+      $('detailBody').innerHTML = '<tr><td colspan="7" class="empty">该区间暂无数据</td></tr>';
       return;
     }
     $('detailBody').innerHTML = json.daily.map((d) => `
@@ -208,16 +198,14 @@ async function openDetail(label) {
         <td>${d.date}</td>
         <td class="num">${d.raw_hours}</td>
         <td class="num">${d.new_task_hours}</td>
+        <td class="num">${d.old_task_hours}</td>
         <td class="num">${d.segment_hours}</td>
-        <td class="num">${d.no_clip_hours}</td>
-        <td class="num">${d.no_clip_equivalent_hours}</td>
-        <td class="num">${d.settlement_reference_hours}</td>
         <td class="num">${d.pass_ratio}%</td>
         <td class="num">${d.cumulative_reference_hours}</td>
       </tr>
     `).join('');
   } catch (e) {
-    $('detailBody').innerHTML = `<tr><td colspan="9" class="empty">加载失败: ${e.message}</td></tr>`;
+    $('detailBody').innerHTML = `<tr><td colspan="7" class="empty">加载失败: ${e.message}</td></tr>`;
   }
 }
 
