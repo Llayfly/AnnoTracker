@@ -233,7 +233,12 @@ async function refreshData() {
   const btn = $('refreshBtn');
   btn.textContent = '采集中...'; btn.disabled = true;
   try {
-    await authFetch('/api/collect', { method: 'POST' });
+    const res = await authFetch('/api/collect', { method: 'POST' });
+    if (!res || !res.ok) {
+      const errText = res ? await res.text() : '网络错误';
+      alert('采集失败: ' + errText);
+      return;
+    }
     setTimeout(() => { loadSummary(); loadStatus(); }, 5000);
   } catch (e) {
     alert('触发采集失败: ' + e.message);
