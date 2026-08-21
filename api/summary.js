@@ -6,11 +6,14 @@ const { requireAuth } = require('../lib/auth');
 const SEC_PER_HOUR = 3600;
 const s2h = (s) => Math.round((Number(s) || 0) / SEC_PER_HOUR * 100) / 100;
 
+// 统一按北京时间(Asia/Shanghai)格式化日期，避免 Vercel(UTC) 时区导致日期错位
 function fmtDate(d) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(d);
+  const get = (t) => parts.find((p) => p.type === t).value;
+  return `${get('year')}-${get('month')}-${get('day')}`;
 }
 
 function getRange(query) {
