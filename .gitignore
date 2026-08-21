@@ -5,3 +5,6 @@ logs/
 *.log
 
 .vercel
+
+# 本地诊断脚本
+test-*.js

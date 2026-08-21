@@ -253,11 +253,30 @@ function exportCSV() {
 }
 
 // ===== 刷新(触发采集) =====
+// 重新采集当前选中的日期范围（平台会修正历史数据，刷新时需重采以保证与平台一致）
+function getDisplayRange() {
+  if (useCustom) {
+    return { start: $('startDate').value, end: $('endDate').value };
+  }
+  const today = new Date();
+  const days = { '1d': 1, '3d': 3, '1w': 7, '15d': 15, '1m': 30 }[currentRange] || 7;
+  const sd = new Date(today);
+  sd.setDate(sd.getDate() - (days - 1));
+  const p = (n) => String(n).padStart(2, '0');
+  const fmt = (d) => `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  return { start: fmt(sd), end: fmt(today) };
+}
+
 async function refreshData() {
   const btn = $('refreshBtn');
   btn.textContent = '采集中...'; btn.disabled = true;
   try {
-    const res = await authFetch('/api/collect', { method: 'POST' });
+    const { start, end } = getDisplayRange();
+    const res = await authFetch('/api/collect', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ start, end }),
+    });
     if (!res || !res.ok) {
       const errText = res ? await res.text() : '网络错误';
       alert('采集失败: ' + errText);
@@ -268,7 +287,7 @@ async function refreshData() {
     // 采集完成后立即刷新显示（接口同步等待采集结束）
     loadSummary();
     loadStatus();
-    alert(`采集完成，更新了 ${json.count} 条数据`);
+    alert(`采集完成（${start} ~ ${end}），更新了 ${json.count} 条数据`);
   } catch (e) {
     alert('触发采集失败: ' + e.message);
   } finally {
