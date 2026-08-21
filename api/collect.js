@@ -25,7 +25,10 @@ module.exports = requireAuth(async (req, res) => {
       }
       const results = await backfill(start, end);
       count = results.reduce((s, r) => s + r.count, 0);
-      message = `重新采集 ${start} ~ ${end} 完成`;
+      const failed = results.filter((r) => r.error);
+      message = failed.length
+        ? `重新采集 ${start} ~ ${end}：${results.length - failed.length}/${results.length} 天成功，失败: ${failed.map((f) => `${f.date}(${f.error})`).join('; ')}`
+        : `重新采集 ${start} ~ ${end} 完成`;
     } else {
       count = await collectToday();
       message = '采集完成';
