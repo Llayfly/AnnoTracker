@@ -50,7 +50,7 @@ const $ = (id) => document.getElementById(id);
 
 // ===== 分组工具（大小写不敏感）=====
 function getGroup(label) {
-  const u = label.toUpperCase();
+  const u = String(label || '').toUpperCase();
   if (u.startsWith('HBHC')) return 'HBHC';
   if (u.startsWith('HC')) return 'HC';
   if (u.startsWith('JS')) return 'JS';
@@ -85,6 +85,10 @@ async function loadSummary() {
     const res = await authFetch(url);
     if (!res) return;
     const json = await res.json();
+    if (!json || !json.data) {
+      container.innerHTML = `<p class="empty">${(json && json.error) ? '加载失败: ' + json.error : '暂无数据'}</p>`;
+      return;
+    }
     $('rangeLabel').textContent = `（${json.range.start} 至 ${json.range.end}）`;
     $('totalCount').textContent = `共 ${json.count} 人`;
     if (!json.data.length) {
@@ -109,6 +113,22 @@ async function loadSummary() {
       const cfg = groupConfig[gkey];
       html += `<div class="group-section">`;
       html += `<div class="group-title ${cfg.cls}">${cfg.title}（${items.length} 人）</div>`;
+
+      // 柱状图：每个标注员的新任务时长（按新任务时长降序）
+      const chartItems = items.slice().sort((a, b) => (Number(b.new_task_hours) || 0) - (Number(a.new_task_hours) || 0));
+      const maxNew = Math.max(...chartItems.map((i) => Number(i.new_task_hours) || 0), 0.001);
+      html += `<div class="group-chart">`;
+      html += chartItems.map((r) => {
+        const v = Number(r.new_task_hours) || 0;
+        const pct = Math.max(Math.round(v / maxNew * 100), v > 0 ? 2 : 0);
+        return `<div class="chart-row" title="${r.label} 新任务 ${v} h">
+          <span class="chart-label">${r.label}</span>
+          <div class="chart-track"><div class="chart-bar" style="width:${pct}%"></div></div>
+          <span class="chart-value">${v}</span>
+        </div>`;
+      }).join('');
+      html += `</div>`;
+
       html += `<div class="table-wrap"><table style="width:100%;font-size:13px;table-layout:fixed;border-collapse:collapse;">
         <thead><tr>
           <th style="width:40px;">排名</th>
@@ -147,7 +167,7 @@ async function loadSummary() {
       const totCum = sum('cumulative_reference_hours');
       const totDays = sum('active_days');
       const avgPass = totRaw > 0 ? Math.round(totSeg / totRaw * 1000) / 10 : 0;
-      const r2 = (n) => Math.round(n * 1000) / 1000;
+      const r2 = (n) => Math.round(n * 100) / 100;
       html += `<tr style="background:#f0f0f0;font-weight:700;border-top:2px solid #999;">
         <td></td>
         <td>${gkey} 合计</td>
@@ -187,6 +207,10 @@ async function openDetail(label) {
     const res = await authFetch(url);
     if (!res) return;
     const json = await res.json();
+    if (!json || !json.daily) {
+      $('detailBody').innerHTML = `<tr><td colspan="7" class="empty">${(json && json.error) ? '加载失败: ' + json.error : '该区间暂无数据'}</td></tr>`;
+      return;
+    }
     $('detailMeta').textContent =
       `原始标签: ${json.raw_label} · 平台累计参考: ${json.cumulative_reference_alltime_hours} h`;
     if (!json.daily.length) {
@@ -239,11 +263,17 @@ async function refreshData() {
       alert('采集失败: ' + errText);
       return;
     }
-    setTimeout(() => { loadSummary(); loadStatus(); }, 5000);
+    const json = await res.json();
+    if (json.error) throw new Error(json.error);
+    // 采集完成后立即刷新显示（接口同步等待采集结束）
+    loadSummary();
+    loadStatus();
+    alert(`采集完成，更新了 ${json.count} 条数据`);
   } catch (e) {
     alert('触发采集失败: ' + e.message);
   } finally {
-    setTimeout(() => { btn.textContent = '刷新数据'; btn.disabled = false; }, 5000);
+    btn.textContent = '刷新数据';
+    btn.disabled = false;
   }
 }
 
@@ -301,6 +331,7 @@ async function loadStatus() {
     const res = await authFetch('/api/status');
     if (!res) return;
     const json = await res.json();
+    if (!json) return;
     const dot = $('statusDot');
     const txt = $('statusText');
     if (json.collecting) {
@@ -309,8 +340,9 @@ async function loadStatus() {
     } else {
       dot.className = 'dot live';
       const last = json.recent_logs && json.recent_logs[0];
+      const dr = json.date_range || {};
       txt.textContent = last
-        ? `数据 ${json.date_range.min} ~ ${json.date_range.max} · 共 ${json.annotator_count} 人 · 最近采集 ${fmtTime(last.created_at)}`
+        ? `数据 ${dr.min} ~ ${dr.max} · 共 ${json.annotator_count} 人 · 最近采集 ${fmtTime(last.created_at)}`
         : `共 ${json.annotator_count} 人`;
     }
     $('footStatus').textContent = `服务器时间: ${fmtTime(json.server_time)}`;

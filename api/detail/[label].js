@@ -4,7 +4,7 @@ const { getDb, ensureInit } = require('../../lib/db');
 const { requireAuth } = require('../../lib/auth');
 
 const SEC_PER_HOUR = 3600;
-const s2h = (s) => Math.round((Number(s) || 0) / SEC_PER_HOUR * 1000) / 1000;
+const s2h = (s) => Math.round((Number(s) || 0) / SEC_PER_HOUR * 100) / 100;
 
 function fmtDate(d) {
   const y = d.getFullYear();

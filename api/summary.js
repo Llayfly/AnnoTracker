@@ -4,7 +4,7 @@ const { getDb, ensureInit } = require('../lib/db');
 const { requireAuth } = require('../lib/auth');
 
 const SEC_PER_HOUR = 3600;
-const s2h = (s) => Math.round((Number(s) || 0) / SEC_PER_HOUR * 1000) / 1000;
+const s2h = (s) => Math.round((Number(s) || 0) / SEC_PER_HOUR * 100) / 100;
 
 function fmtDate(d) {
   const y = d.getFullYear();
@@ -57,11 +57,11 @@ module.exports = requireAuth(async (req, res) => {
     const search = req.query.search ? `%${req.query.search.trim()}%` : '%';
     const workingDays = countWorkingDays(start, end);
 
-    // 原始时长 = 每天新任务时长的累加（不含旧任务）
+    // 原始时长 = 每天总原始时长（新任务 + 旧任务）
     const result = await db.execute({
       sql: `SELECT
         a.id, a.label, a.raw_label,
-        COALESCE(SUM(d.new_task_raw_seconds),0) AS raw_seconds,
+        COALESCE(SUM(d.raw_seconds),0) AS raw_seconds,
         COALESCE(SUM(d.new_task_raw_seconds),0) AS new_task_raw_seconds,
         COALESCE(SUM(d.old_task_raw_seconds),0) AS old_task_raw_seconds,
         COALESCE(SUM(d.segment_seconds),0) AS segment_seconds,
@@ -99,7 +99,7 @@ module.exports = requireAuth(async (req, res) => {
         settlement_reference_hours: s2h(r.settlement_reference_seconds),
         pass_ratio: passRatio,
         cumulative_reference_hours: s2h(r.cumulative_reference_seconds),
-        daily_avg_raw_hours: Math.round(dailyAvgRawHours * 1000) / 1000,
+        daily_avg_raw_hours: Math.round(dailyAvgRawHours * 100) / 100,
         active_days: r.active_days,
         level: getLevel(dailyAvgRawHours),
       };
