@@ -70,7 +70,7 @@ module.exports = requireAuth(async (req, res) => {
           : 0;
         return {
           date: r.date,
-          raw_hours: s2h(r.new_task_raw_seconds),
+          raw_hours: s2h(r.raw_seconds),
           new_task_hours: s2h(r.new_task_raw_seconds),
           old_task_hours: s2h(r.old_task_raw_seconds),
           segment_hours: s2h(r.segment_seconds),
