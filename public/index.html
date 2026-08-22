@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>标注员工作统计监控</title>
-  <link rel="stylesheet" href="style.css?v=20260821" />
+  <title>标注员工作统计监控（新快照系统）</title>
+  <link rel="stylesheet" href="style.css?v=20260823" />
   <style>
     .group-section { margin-bottom: 24px; }
     .group-title { font-size: 16px; font-weight: 700; margin: 16px 0 8px; padding: 8px 12px; border-radius: 6px; }
@@ -25,13 +25,37 @@
     .chart-track { flex: 1; height: 14px; background: #f0f0f0; border-radius: 7px; overflow: hidden; }
     .chart-bar { height: 100%; background: linear-gradient(90deg, #42a5f5, #1e88e5); border-radius: 7px; min-width: 0; }
     .chart-value { flex: 0 0 52px; font-size: 12px; font-weight: 700; color: #1565c0; text-align: right; }
+    .src-badge { display: inline-block; padding: 1px 6px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+    .src-auto { background: #e8eaf6; color: #3949ab; }
+    .src-manual { background: #fff3e0; color: #e65100; }
+    .manual-form { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; padding: 16px 20px; }
+    .manual-form .form-group { margin-bottom: 0; }
+    .manual-form .full { grid-column: 1 / -1; }
+    .manual-form label { display: block; font-size: 12px; font-weight: 600; color: #555; margin-bottom: 4px; }
+    .manual-form input {
+      width: 100%; padding: 8px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px;
+    }
+    .manual-form input:focus { outline: none; border-color: var(--primary); }
+    .manual-actions { display: flex; gap: 10px; padding: 0 20px 20px; }
+    .manual-actions button {
+      flex: 1; padding: 10px; border-radius: 7px; border: none; cursor: pointer; font-size: 14px; font-weight: 600;
+    }
+    .btn-save { background: var(--primary); color: #fff; }
+    .btn-save:hover { background: #1d4ed8; }
+    .btn-del { background: #fee2e2; color: #b91c1c; }
+    .btn-del:hover { background: #fecaca; }
+    .manual-tip { padding: 0 20px 16px; font-size: 12px; color: #999; }
+    .note-banner {
+      background: #fff7ed; border: 1px solid #fed7aa; color: #9a3412;
+      padding: 10px 16px; border-radius: 8px; font-size: 13px; margin-bottom: 16px;
+    }
   </style>
 </head>
 <body>
   <header class="topbar">
     <div class="brand">
       <h1>标注员工作统计监控</h1>
-      <span class="sub">数据来源：data-platform.synapath.com · 全组织采集</span>
+      <span class="sub">新快照系统（2026-08-23 起）· 每天 23:59 采集单日数据</span>
     </div>
     <div class="status" id="statusBar">
       <span class="dot" id="statusDot"></span>
@@ -49,12 +73,17 @@
       <a href="/salary" style="padding:10px 24px;text-decoration:none;color:#666;font-weight:600;border-bottom:3px solid transparent;margin-bottom:-2px;">薪资计算</a>
     </div>
 
+    <div class="note-banner">
+      新系统说明：从 <strong>2026-08-23</strong> 起，每天 <strong>23:59</strong> 自动采集平台单日数据（可靠，不受平台区间算法影响）。
+      原始时长 = 新任务之和；旧任务、片段、PASS 占比等列照常显示。可手动录入（自己截图记录）当天数据。
+    </div>
+
     <!-- 控制面板 -->
     <section class="panel controls">
       <div class="ranges" id="rangeBtns">
         <button data-range="1d">最近1天</button>
         <button data-range="3d">最近3天</button>
-        <button data-range="1w" class="active">最近1周</button>
+        <button data-range="1w">最近1周</button>
         <button data-range="15d">最近15天</button>
         <button data-range="1m">最近1月</button>
       </div>
@@ -68,7 +97,7 @@
         <input type="text" id="searchInput" placeholder="按标注员名称搜索..." />
       </div>
       <div class="actions">
-        <button id="backfillBtn" class="btn-secondary">回填历史数据</button>
+        <button id="manualBtn" class="btn-secondary">手动录入</button>
         <button id="exportBtn" class="btn-secondary">导出CSV</button>
         <button id="refreshBtn" class="btn-secondary">刷新数据</button>
       </div>
@@ -104,7 +133,8 @@
               <th>旧任务(h)</th>
               <th>片段时长(h)</th>
               <th>PASS占比</th>
-              <th>区间累计(h)</th>
+              <th>结算参考(h)</th>
+              <th>来源</th>
             </tr>
           </thead>
           <tbody id="detailBody"></tbody>
@@ -113,24 +143,49 @@
     </div>
   </div>
 
-  <!-- 回填弹窗 -->
-  <div class="modal" id="backfillModal">
-    <div class="modal-content" style="max-width: 480px;">
+  <!-- 手动录入弹窗 -->
+  <div class="modal" id="manualModal">
+    <div class="modal-content" style="max-width: 560px;">
       <div class="modal-head">
-        <h2>回填历史数据</h2>
-        <button class="close" id="closeBackfill">&times;</button>
+        <h2>手动录入快照（自己截图记录）</h2>
+        <button class="close" id="closeManual">&times;</button>
       </div>
-      <div style="padding: 16px 0;">
-        <p style="margin-bottom: 12px; color: #666;">输入需要回填的日期范围，系统将逐日采集历史数据。</p>
-        <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 12px;">
-          <input type="date" id="backfillStart" style="flex: 1; padding: 6px 8px; border: 1px solid #ddd; border-radius: 4px;" />
-          <span>至</span>
-          <input type="date" id="backfillEnd" style="flex: 1; padding: 6px 8px; border: 1px solid #ddd; border-radius: 4px;" />
+      <div class="manual-form">
+        <div class="form-group">
+          <label>日期</label>
+          <input type="date" id="mDate" />
         </div>
-        <p style="margin-bottom: 12px; color: #999; font-size: 12px;">提示：每次最多回填7天，避免超时。如需更多请分多次执行。</p>
-        <button id="doBackfill" style="width: 100%; padding: 10px; background: #111; color: #fff; border: none; border-radius: 6px; cursor: pointer;">开始回填</button>
-        <div id="backfillResult" style="margin-top: 12px; font-size: 13px; color: #666;"></div>
+        <div class="form-group">
+          <label>标注员</label>
+          <input type="text" id="mLabel" placeholder="如 HC8" />
+        </div>
+        <div class="form-group">
+          <label>新任务(h)</label>
+          <input type="number" id="mNew" step="0.01" min="0" placeholder="0.00" />
+        </div>
+        <div class="form-group">
+          <label>旧任务(h)</label>
+          <input type="number" id="mOld" step="0.01" min="0" placeholder="0.00" />
+        </div>
+        <div class="form-group">
+          <label>片段时长(h)</label>
+          <input type="number" id="mSeg" step="0.01" min="0" placeholder="0.00" />
+        </div>
+        <div class="form-group">
+          <label>无片段(h)</label>
+          <input type="number" id="mNoClip" step="0.01" min="0" placeholder="0.00" />
+        </div>
+        <div class="form-group full">
+          <label>PASS片段(h)</label>
+          <input type="number" id="mPass" step="0.01" min="0" placeholder="0.00" />
+        </div>
       </div>
+      <div class="manual-tip">提示：原始时长自动 = 新任务时长。无片段等效按 0.2 系数计算，结算参考 = PASS片段 + 无片段等效。</div>
+      <div class="manual-actions">
+        <button class="btn-del" id="mDelete">删除该记录</button>
+        <button class="btn-save" id="mSave">保存</button>
+      </div>
+      <div id="manualResult" style="padding:0 20px 16px;font-size:13px;color:#666;"></div>
     </div>
   </div>
 
@@ -138,6 +193,6 @@
     <span id="footStatus"></span>
   </footer>
 
-  <script src="app.js?v=20260821"></script>
+  <script src="app.js?v=20260823"></script>
 </body>
 </html>

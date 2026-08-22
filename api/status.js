@@ -1,5 +1,5 @@
 'use strict';
-// GET /api/status —— 系统状态
+// GET /api/status —— 系统状态（新快照系统）
 const { getDb, ensureInit } = require('../lib/db');
 const { requireAuth } = require('../lib/auth');
 
@@ -10,7 +10,7 @@ module.exports = requireAuth(async (req, res) => {
     // 用 batch 合并 3 次查询为 1 次网络往返
     const results = await db.batch([
       'SELECT COUNT(*) AS c FROM annotators',
-      'SELECT MIN(date) AS min, MAX(date) AS max FROM daily_stats',
+      'SELECT MIN(date) AS min, MAX(date) AS max FROM daily_snapshots',
       'SELECT * FROM collection_log ORDER BY created_at DESC LIMIT 10',
     ], 'read');
 

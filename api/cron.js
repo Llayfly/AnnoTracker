@@ -1,7 +1,8 @@
 'use strict';
-// GET /api/cron —— 定时采集端点
+// GET /api/cron —— 定时采集端点（每天 23:59 北京时间触发）
 // 供 Vercel Cron 或外部 cron-job.org 调用，通过 CRON_SECRET 密钥验证，无需 JWT 登录
-const { collectToday, collectBatches } = require('../lib/collector');
+// 新快照系统：采集最新可用的单日数据（平台每天 00:23 生成前一天数据）
+const { collectSnapshotLatest } = require('../lib/collector');
 const { ensureInit, migrateLabels } = require('../lib/db');
 
 module.exports = async (req, res) => {
@@ -19,20 +20,14 @@ module.exports = async (req, res) => {
   }
   try {
     await ensureInit();
-    await migrateLabels();
-    const count = await collectToday();
-    // 同时采集批次数据（失败不影响主流程）
-    let batchResult = null;
-    try {
-      batchResult = await collectBatches();
-    } catch (e) {
-      console.error('[api] cron batch collection error:', e.message);
-    }
+    let migration = null;
+    try { migration = await migrateLabels(); } catch (e) { console.error('[api] migrateLabels error:', e.message); }
+    const result = await collectSnapshotLatest();
     res.json({
       ok: true,
-      message: '定时采集完成',
-      count,
-      batch: batchResult,
+      message: '快照采集完成',
+      result,
+      migration,
       time: new Date().toISOString(),
     });
   } catch (e) {

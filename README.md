@@ -1,268 +1,149 @@
-# 标注员工作统计监控网站
+# 标注员工作统计监控网站（新快照系统）
 
-自动从数据标注平台 `data-platform.synapath.com` 采集标注员每日工作数据，汇总展示并提供预警。
+自动从数据标注平台 `data-platform.synapath.com` 采集标注员**单日**工作数据，从 **2026-08-23** 起每天 **23:59（北京时间）** 定时快照，逐日累加展示。与 2026-08-23 之前的旧数据完全分离。
+
+## 为什么是「单日快照」？
+
+平台的「区间累计」数据不稳定（今天截和过几天截的结果不一样），但**单日数据**（`day=YYYY-MM-DD`）可靠。因此本系统每天采集一次单日数据并保存，展示时按所选区间逐日累加：
+
+- **原始时长 = 新任务之和**（区间内每天新任务时长累加）
+- 旧任务、片段时长、无片段、PASS 占比、结算参考等列照常展示
+- 支持**手动录入**（自己截图记录），自动采集与手动录入互不覆盖
 
 ## 功能特性
 
-- **多时间范围查询**：最近1天 / 3天 / 1周 / 15天 / 1个月，支持自定义起止日期
+- **多时间范围查询**：最近1天 / 3天 / 1周 / 15天 / 1月，支持自定义起止日期（仅限 2026-08-23 之后）
 - **标注员搜索**：按名称实时模糊搜索
-- **汇总数据**：原始时长、片段时长、无片段时长、无片段等效、结算参考、累计参考、日均时长、活跃天数
-- **颜色预警**：日均原始时长 <3h 红色预警，3-5h 蓝色正常，>5h 绿色活跃
-- **每日明细**：点击标注员查看逐日数据
+- **分组展示**：按组织分组（HC / C / HBHC / S / JS / 其他），每组带蓝色柱状图（新任务时长降序）
+- **汇总数据**：原始时长(=新任务之和)、旧任务、片段时长、PASS占比、结算参考、日均新任务
+- **每日明细**：点击标注员查看逐日数据（含来源：自动/手动）
+- **手动录入**：自己截图记录当天数据（原始时长自动 = 新任务）
 - **CSV 导出**：一键导出当前查询结果
-- **自动采集**：每30分钟采集当天，每天00:10补采前一天，首次启动回填30天
-- **公开访问**：部署后无需登录即可查看
+- **自动采集**：每天 23:59（北京时间）Vercel Cron 触发，采集最新可用单日数据
+- **登录保护**：所有数据接口需 JWT 认证
 
 ## 技术栈
 
 | 组件 | 技术 |
 |------|------|
-| 后端 | Node.js + Express |
-| 数据库 | SQLite (better-sqlite3) |
-| 定时任务 | node-cron |
+| 部署 | Vercel（Serverless Functions + Static） |
+| 数据库 | Turso（libSQL，`@libsql/client`） |
+| 定时任务 | Vercel Cron（`vercel.json`） |
 | 前端 | 原生 HTML / CSS / JS |
-| 进程管理 | PM2 |
-| 反向代理 | Nginx |
-| SSL 证书 | Let's Encrypt (certbot) |
+| 认证 | JWT（`jsonwebtoken`） |
 
 ## 项目结构
 
 ```
 annotator-monitor/
-├── src/
-│   ├── config.js        # 配置读取（环境变量）
-│   ├── db.js            # SQLite 建表 + 预编译语句
-│   ├── collector.js     # 数据采集（登录/请求/入库）
-│   ├── scheduler.js     # 定时任务（node-cron）
-│   └── server.js        # Express 服务 + API 路由
+├── api/
+│   ├── login.js            # 登录（签发 JWT）
+│   ├── snapshot.js         # 新快照系统一体化接口（汇总/明细/导出/手动录入）
+│   ├── collect.js          # 手动触发采集（可指定日期范围重采）
+│   ├── cron.js             # 定时采集端点（Vercel Cron 调用）
+│   ├── status.js           # 系统状态
+│   ├── batches.js          # 批次管理
+│   ├── collect-batches.js  # 批次自动采集
+│   ├── salary.js           # 薪资计算
+│   └── health.js           # 健康检查
+├── lib/
+│   ├── db.js               # Turso 建表 + 快照读写 + 手动录入
+│   ├── collector.js        # 平台登录 + 单日快照采集 + 批次采集
+│   └── auth.js             # JWT 认证中间件
 ├── public/
-│   ├── index.html       # 页面结构
-│   ├── style.css        # 样式
-│   └── app.js           # 前端交互逻辑
-├── deploy/
-│   ├── nginx.conf       # Nginx 配置模板
-│   └── deploy.sh        # 一键部署脚本
-├── ecosystem.config.js   # PM2 配置
-├── .env.example          # 环境变量模板
-├── .gitignore
+│   ├── index.html          # 统计监控主页面
+│   ├── app.js              # 前端交互逻辑
+│   ├── login.html          # 登录页
+│   ├── batches.html/js     # 批次管理
+│   ├── salary.html/js      # 薪资计算
+│   └── style.css           # 样式
+├── vercel.json             # Vercel 配置（region / cron / headers）
+├── .env.example            # 环境变量模板
 └── package.json
 ```
 
-## 本地开发
+## 部署到 Vercel
 
-### 环境要求
+1. 将代码推送到 GitHub 仓库，在 Vercel 导入该仓库。
+2. 在 Vercel 项目设置中配置环境变量（见下表）。
+3. 部署后访问 `https://<你的域名>`。
 
-- Node.js >= 18
-- npm
+### 环境变量
 
-### 步骤
+| 变量 | 说明 |
+|------|------|
+| `TURSO_DATABASE_URL` | Turso 数据库连接地址（`libsql://...`） |
+| `TURSO_AUTH_TOKEN` | Turso 数据库认证令牌 |
+| `AM_PLATFORM_BASE_URL` | 数据标注平台地址 |
+| `AM_PLATFORM_EMAIL` | 平台登录邮箱 |
+| `AM_PLATFORM_PASSWORD` | 平台登录密码 |
+| `AM_PLATFORM_ORGS` | 采集组织，逗号分隔（默认 `HC,C,S,JS`） |
+| `AM_NO_CLIP_FACTOR` | 无片段等效系数（默认 `0.2`） |
+| `AM_REQUEST_TIMEOUT_MS` | 平台请求超时（默认 `8000`） |
+| `AM_AUTH_USERNAME` | 网站登录用户名 |
+| `AM_AUTH_PASSWORD` | 网站登录密码 |
+| `AM_JWT_SECRET` | JWT 签名密钥 |
+| `CRON_SECRET` | 定时采集密钥（Vercel Cron 自动携带） |
 
-```bash
-# 1. 安装依赖
-cd annotator-monitor
-npm install
-
-# 2. 配置环境变量
-cp .env.example .env
-# 按需修改 .env 中的账号和端口
-
-# 3. 启动服务（首次启动自动回填30天历史数据）
-npm start
-```
-
-浏览器访问 `http://localhost:3000`。
-
-### 命令行模式
-
-```bash
-# 仅回填最近30天（不启动服务，跑完退出）
-npm run backfill
-
-# 仅采集当天一次（不启动服务，跑完退出）
-npm run collect:once
-```
-
-## 服务器部署
-
-### 方式一：一键部署脚本（推荐）
-
-适用于 Ubuntu / Debian 服务器。
-
-```bash
-# 1. 将项目上传到服务器（git clone 或 scp）
-git clone <your-repo-url> /opt/annotator-monitor
-cd /opt/annotator-monitor
-
-# 2. 修改 nginx.conf 中的域名
-vim deploy/nginx.conf
-# 将 your-domain.com 替换为你的实际域名
-
-# 3. 执行部署脚本（传入域名参数）
-bash deploy/deploy.sh your-domain.com
-```
-
-脚本会自动完成：
-1. 安装 Node.js 20、Nginx、Certbot
-2. 安装项目依赖和 PM2
-3. 生成 .env 配置文件
-4. 启动 PM2 进程并设置开机自启
-5. 配置 Nginx 反向代理
-6. 申请 Let's Encrypt SSL 证书并自动配置 HTTPS
-
-部署完成后访问 `https://your-domain.com` 即可。
-
-### 方式二：手动部署
-
-#### 1. 安装系统依赖
-
-```bash
-sudo apt-get update
-sudo apt-get install -y nodejs npm nginx certbot python3-certbot-nginx
-
-# 安装 Node.js 20
-sudo npm install -g n
-sudo n 20
-
-# 安装 PM2
-sudo npm install -g pm2
-```
-
-#### 2. 安装项目
-
-```bash
-cd /opt/annotator-monitor
-npm install
-cp .env.example .env
-# 编辑 .env，填入平台账号和配置
-vim .env
-```
-
-#### 3. 启动 PM2
-
-```bash
-mkdir -p logs data
-pm2 start ecosystem.config.js
-pm2 save
-pm2 startup systemd -u $(whoami) --hp $HOME
-```
-
-#### 4. 配置 Nginx
-
-```bash
-sudo cp deploy/nginx.conf /etc/nginx/sites-available/annotator-monitor
-# 替换域名
-sudo sed -i 's/your-domain.com/实际域名/g' /etc/nginx/sites-available/annotator-monitor
-sudo ln -sf /etc/nginx/sites-available/annotator-monitor /etc/nginx/sites-enabled/
-sudo rm -f /etc/nginx/sites-enabled/default
-sudo nginx -t
-sudo systemctl reload nginx
-```
-
-#### 5. 申请 SSL 证书
-
-```bash
-sudo certbot --nginx -d your-domain.com --redirect
-```
-
-## 环境变量说明
-
-| 变量 | 说明 | 默认值 |
-|------|------|--------|
-| `AM_PLATFORM_BASE_URL` | 数据标注平台地址 | `https://data-platform.synapath.com` |
-| `AM_PLATFORM_EMAIL` | 平台登录邮箱 | `198176@qq.com` |
-| `AM_PLATFORM_PASSWORD` | 平台登录密码 | `qwe123` |
-| `AM_PLATFORM_ORG` | 所属组织 | `HC` |
-| `AM_PORT` | 服务监听端口 | `3000` |
-| `AM_DB_PATH` | SQLite 数据库路径 | `./data/stats.db` |
-| `AM_BACKFILL_DAYS` | 首次回填天数 | `30` |
-| `AM_NO_CLIP_FACTOR` | 无片段等效系数 | `0.2` |
-| `AM_REQUEST_DELAY_MS` | 请求间隔（毫秒） | `800` |
-| `AM_REQUEST_TIMEOUT_MS` | 请求超时（毫秒） | `30000` |
-
-> 所有变量使用 `AM_` 前缀，避免与系统环境变量冲突。
-
-## API 接口
-
-### `GET /api/status`
-系统状态：标注员数量、数据日期范围、采集状态、最近日志。
-
-### `GET /api/summary`
-汇总数据。参数：`range`（1d/3d/1w/15d/1m）或 `start`+`end`，可选 `search`。
-
-### `GET /api/detail/:label`
-某标注员每日明细。参数同 summary。
-
-### `GET /api/export`
-导出 CSV。参数同 summary。
-
-### `POST /api/collect`
-手动触发当天数据采集。
-
-## 数据采集流程
-
-```
-登录平台 (POST /api/v1/annotator-auth/login)
-    ↓ 获取 JWT token
-循环调用统计 API (GET /api/v1/analytics/annotation-analytics?day=YYYY-MM-DD)
-    ↓ 解析返回 JSON
-计算无片段等效 = 无片段时长 × 0.2
-计算结算参考 = 终审通过片段时长 + 无片段等效
-    ↓ 写入 SQLite
-前端通过本系统 API 查询展示
-```
+> 注意：`vercel.json` 中 `regions` 需与 Turso 数据库同区域（如 Turso `nrt` → Vercel `hnd1`），否则查询延迟很高。
 
 ### 定时任务
 
 | 频率 | 任务 |
 |------|------|
-| 每30分钟 | 采集当天最新数据 |
-| 每天 00:10 | 补采前一天数据 |
-| 首次启动 | 回填最近30天历史 |
-| 服务启动 | 检查缺失日期并补采 |
+| 每天 23:59（北京时间，即 15:59 UTC） | 采集最新可用单日快照 |
 
-## 运维命令
+平台每天 00:23（北京时间）生成前一天数据，因此 23:59 采集时会自动回退采集前一天的数据（当天数据尚未生成）。
 
-```bash
-# 查看进程状态
-pm2 status
+## API 接口
 
-# 查看实时日志
-pm2 logs annotator-monitor
+### `POST /api/login`
+登录，返回 JWT token。参数：`{ username, password }`。
 
-# 重启服务
-pm2 restart annotator-monitor
+### `GET /api/snapshot?start=&end=&search=`
+汇总数据（原始时长 = 新任务之和）。参数：`start`、`end`（YYYY-MM-DD，仅限 2026-08-23 之后）、`search`（可选）。
 
-# 停止服务
-pm2 stop annotator-monitor
+### `GET /api/snapshot?mode=detail&label=&start=&end=`
+某标注员每日明细。
 
-# 查看 Nginx 状态
-sudo systemctl status nginx
+### `GET /api/snapshot?mode=export&start=&end=`
+导出 CSV。
 
-# 手动触发采集（命令行）
-pm2 trigger annotator-monitor collectToday
+### `POST /api/snapshot?mode=manual`
+手动录入/更新快照。参数：`{ label, date, newTaskHours, oldTaskHours, segmentHours, noClipHours, passSegmentHours }`。
+
+### `DELETE /api/snapshot?mode=manual`
+删除手动快照。参数：`{ label, date }`。
+
+### `POST /api/collect`
+手动触发采集。可选 body：`{ start, end }` 重新采集指定日期范围（最多7天）；不带参数则采集最新可用数据。
+
+### `GET /api/cron`
+定时采集端点（Vercel Cron 调用，通过 `CRON_SECRET` 验证）。
+
+### `GET /api/status`
+系统状态：标注员数量、快照日期范围、最近采集日志。
+
+## 数据采集流程
+
 ```
+每天 23:59 北京时间（Vercel Cron → /api/cron）
+    ↓
+登录平台 (POST /api/v1/annotator-auth/login)
+    ↓ 获取 JWT token
+并行请求各组织统计 API (GET /api/v1/analytics/annotation-analytics?day=YYYY-MM-DD)
+    ↓ 按标注员去重（保留原始时长最大行）
+计算：无片段等效 = 无片段 × 0.2；结算参考 = PASS片段 + 无片段等效
+    ↓ 写入 daily_snapshots（source='auto'）
+前端通过 /api/snapshot 查询，按区间逐日累加展示
+```
+
+手动录入写入 `daily_snapshots`（source='manual'），自动采集不会覆盖手动记录。
 
 ## 常见问题
 
-### 首次启动数据为空
-首次启动会自动回填30天历史数据，由于每天需要单独请求，回填需要几分钟。可在 `/api/status` 查看采集进度。
+### 数据为空
+新系统从 2026-08-23 开始采集。平台每天 00:23 生成前一天数据，因此当天数据需次日才能采集到。可点击「手动录入」自己截图记录当天数据。
 
-### 平台密码变更
-修改 `.env` 中的 `AM_PLATFORM_PASSWORD`，然后 `pm2 restart annotator-monitor`。
-
-### 数据库重置
-```bash
-pm2 stop annotator-monitor
-rm -f data/stats.db data/stats.db-wal data/stats.db-shm
-pm2 start annotator-monitor
-# 会自动重新回填30天数据
-```
-
-### 端口被占用
-修改 `.env` 中的 `AM_PORT`，同步修改 `deploy/nginx.conf` 中的 `proxy_pass` 端口，重启 PM2 和 Nginx。
-
-### SSL 证书续期
-Certbot 会自动安装定时续期任务。手动测试续期：
-```bash
-sudo certbot renew --dry-run
-```
+### 手动录入与自动采集冲突
+手动录入的记录（source='manual'）优先，自动采集不会覆盖手动记录。如需修正，可在手动录入弹窗中删除该记录后重新录入。

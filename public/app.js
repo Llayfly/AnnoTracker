@@ -1,5 +1,5 @@
 'use strict';
-// 前端逻辑：认证、查询、渲染、明细、导出、回填
+// 前端逻辑（新快照系统）：认证、查询、渲染、明细、手动录入、导出、刷新
 
 // ===== 认证 =====
 const TOKEN_KEY = 'am_token';
@@ -43,10 +43,14 @@ if (currentUser) {
 }
 
 // ===== 业务逻辑 =====
+const START_DATE = '2026-08-23';
 let currentRange = '1w';
 let useCustom = false;
 
 const $ = (id) => document.getElementById(id);
+
+const p = (n) => String(n).padStart(2, '0');
+const fmt = (d) => `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 
 // ===== 分组工具（大小写不敏感）=====
 function getGroup(label) {
@@ -68,15 +72,16 @@ const groupConfig = {
   other: { title: '其他', cls: 'group-other' },
 };
 
-// ===== 汇总数据（按 HC/C/S 分组 + 排行） =====
+// ===== 汇总数据 =====
 async function loadSummary() {
   const container = $('summaryContainer');
   container.innerHTML = '<p class="empty">加载中...</p>';
-  let url = '/api/summary?';
+  let url = '/api/snapshot?';
   if (useCustom) {
     url += `start=${$('startDate').value}&end=${$('endDate').value}`;
   } else {
-    url += `range=${currentRange}`;
+    const { start, end } = getDisplayRange();
+    url += `start=${start}&end=${end}`;
   }
   const search = $('searchInput').value.trim();
   if (search) url += `&search=${encodeURIComponent(search)}`;
@@ -92,21 +97,19 @@ async function loadSummary() {
     $('rangeLabel').textContent = `（${json.range.start} 至 ${json.range.end}）`;
     $('totalCount').textContent = `共 ${json.count} 人`;
     if (!json.data.length) {
-      container.innerHTML = '<p class="empty">暂无数据</p>';
+      container.innerHTML = '<p class="empty">该区间暂无数据（数据从 2026-08-23 起每天 23:59 采集）</p>';
       return;
     }
 
-    // 先分配全局排名（所有组织一起排序）
+    // 全局排名
     json.data.forEach((r, i) => { r._rank = i + 1; });
 
-    // 按 HC/C/HBHC/S/JS/其他 分组（保留全局排名）
+    // 分组
     const groups = { HC: [], C: [], HBHC: [], S: [], JS: [], other: [] };
     json.data.forEach((r) => {
-      const g = getGroup(r.label);
-      groups[g].push(r);
+      groups[getGroup(r.label)].push(r);
     });
 
-    // 渲染每组表格（显示全局排名）
     let html = '';
     for (const [gkey, items] of Object.entries(groups)) {
       if (!items.length) continue;
@@ -114,14 +117,14 @@ async function loadSummary() {
       html += `<div class="group-section">`;
       html += `<div class="group-title ${cfg.cls}">${cfg.title}（${items.length} 人）</div>`;
 
-      // 柱状图：每个标注员的新任务时长（按新任务时长降序）
-      const chartItems = items.slice().sort((a, b) => (Number(b.new_task_hours) || 0) - (Number(a.new_task_hours) || 0));
-      const maxNew = Math.max(...chartItems.map((i) => Number(i.new_task_hours) || 0), 0.001);
+      // 柱状图：每个标注员的新任务时长（原始时长，降序）
+      const chartItems = items.slice().sort((a, b) => (Number(b.raw_hours) || 0) - (Number(a.raw_hours) || 0));
+      const maxNew = Math.max(...chartItems.map((i) => Number(i.raw_hours) || 0), 0.001);
       html += `<div class="group-chart">`;
       html += chartItems.map((r) => {
-        const v = Number(r.new_task_hours) || 0;
+        const v = Number(r.raw_hours) || 0;
         const pct = Math.max(Math.round(v / maxNew * 100), v > 0 ? 2 : 0);
-        return `<div class="chart-row" title="${r.label} 新任务 ${v} h">
+        return `<div class="chart-row" title="${r.label} 原始时长 ${v} h">
           <span class="chart-label">${r.label}</span>
           <div class="chart-track"><div class="chart-bar" style="width:${pct}%"></div></div>
           <span class="chart-value">${v}</span>
@@ -134,11 +137,10 @@ async function loadSummary() {
           <th style="width:40px;">排名</th>
           <th>标注员</th>
           <th>原始时长(h)</th>
-          <th>新任务(h)</th>
           <th>旧任务(h)</th>
           <th>片段时长(h)</th>
           <th>PASS占比</th>
-          <th>累计参考(h)</th>
+          <th>结算参考(h)</th>
           <th>日均新任务(h)</th>
         </tr></thead><tbody>`;
 
@@ -148,36 +150,32 @@ async function loadSummary() {
         html += `<tr data-label="${r.label}">
           <td class="rank-cell ${rankCls}">${rank}</td>
           <td><strong>${r.label}</strong></td>
-          <td class="num">${r.raw_hours}</td>
-          <td class="num">${r.new_task_hours}</td>
+          <td class="num"><strong>${r.raw_hours}</strong></td>
           <td class="num">${r.old_task_hours}</td>
           <td class="num">${r.segment_hours}</td>
           <td class="num">${r.pass_ratio}%</td>
-          <td class="num">${r.cumulative_reference_hours}</td>
-          <td class="num"><strong>${r.daily_avg_raw_hours}</strong></td>
+          <td class="num">${r.settlement_reference_hours}</td>
+          <td class="num">${r.daily_avg_raw_hours}</td>
         </tr>`;
       });
 
       // 组织合计
       const sum = (key) => items.reduce((s, r) => s + (Number(r[key]) || 0), 0);
       const totRaw = sum('raw_hours');
-      const totNew = sum('new_task_hours');
       const totOld = sum('old_task_hours');
       const totSeg = sum('segment_hours');
-      const totCum = sum('cumulative_reference_hours');
-      const totDays = sum('active_days');
+      const totSettle = sum('settlement_reference_hours');
       const avgPass = totRaw > 0 ? Math.round(totSeg / totRaw * 1000) / 10 : 0;
       const r2 = (n) => Math.round(n * 100) / 100;
       html += `<tr style="background:#f0f0f0;font-weight:700;border-top:2px solid #999;">
         <td></td>
         <td>${gkey} 合计</td>
         <td class="num">${r2(totRaw)}</td>
-        <td class="num">${r2(totNew)}</td>
         <td class="num">${r2(totOld)}</td>
         <td class="num">${r2(totSeg)}</td>
         <td class="num">${avgPass}%</td>
-        <td class="num">${r2(totCum)}</td>
-        <td class="num">${r2(totNew > 0 && totDays > 0 ? totNew / (Math.max(...items.map(i => i.active_days)) || 1) : 0)}</td>
+        <td class="num">${r2(totSettle)}</td>
+        <td class="num">-</td>
       </tr>`;
 
       html += '</tbody></table></div></div>';
@@ -195,41 +193,42 @@ async function loadSummary() {
 // ===== 明细 =====
 async function openDetail(label) {
   $('detailTitle').textContent = `${label} 每日明细`;
-  $('detailBody').innerHTML = '<tr><td colspan="7" class="empty">加载中...</td></tr>';
+  $('detailBody').innerHTML = '<tr><td colspan="8" class="empty">加载中...</td></tr>';
   $('detailModal').classList.add('show');
-  let url = `/api/detail/${encodeURIComponent(label)}?`;
+  let url = `/api/snapshot?mode=detail&label=${encodeURIComponent(label)}&`;
   if (useCustom) {
     url += `start=${$('startDate').value}&end=${$('endDate').value}`;
   } else {
-    url += `range=${currentRange}`;
+    const { start, end } = getDisplayRange();
+    url += `start=${start}&end=${end}`;
   }
   try {
     const res = await authFetch(url);
     if (!res) return;
     const json = await res.json();
     if (!json || !json.daily) {
-      $('detailBody').innerHTML = `<tr><td colspan="7" class="empty">${(json && json.error) ? '加载失败: ' + json.error : '该区间暂无数据'}</td></tr>`;
+      $('detailBody').innerHTML = `<tr><td colspan="8" class="empty">${(json && json.error) ? '加载失败: ' + json.error : '该区间暂无数据'}</td></tr>`;
       return;
     }
-    $('detailMeta').textContent =
-      `原始标签: ${json.raw_label} · 平台累计参考: ${json.cumulative_reference_alltime_hours} h`;
+    $('detailMeta').textContent = `原始标签: ${json.raw_label} · 区间 ${json.range.start} ~ ${json.range.end}`;
     if (!json.daily.length) {
-      $('detailBody').innerHTML = '<tr><td colspan="7" class="empty">该区间暂无数据</td></tr>';
+      $('detailBody').innerHTML = '<tr><td colspan="8" class="empty">该区间暂无数据</td></tr>';
       return;
     }
     $('detailBody').innerHTML = json.daily.map((d) => `
       <tr>
         <td>${d.date}</td>
-        <td class="num">${d.raw_hours}</td>
+        <td class="num"><strong>${d.raw_hours}</strong></td>
         <td class="num">${d.new_task_hours}</td>
         <td class="num">${d.old_task_hours}</td>
         <td class="num">${d.segment_hours}</td>
         <td class="num">${d.pass_ratio}%</td>
-        <td class="num">${d.cumulative_reference_hours}</td>
+        <td class="num">${d.settlement_reference_hours}</td>
+        <td><span class="src-badge ${d.source === 'manual' ? 'src-manual' : 'src-auto'}">${d.source === 'manual' ? '手动' : '自动'}</span></td>
       </tr>
     `).join('');
   } catch (e) {
-    $('detailBody').innerHTML = `<tr><td colspan="7" class="empty">加载失败: ${e.message}</td></tr>`;
+    $('detailBody').innerHTML = `<tr><td colspan="8" class="empty">加载失败: ${e.message}</td></tr>`;
   }
 }
 
@@ -240,11 +239,12 @@ function exportCSV() {
     redirectToLogin();
     return;
   }
-  let url = '/api/export?';
+  let url = '/api/snapshot?mode=export&';
   if (useCustom) {
     url += `start=${$('startDate').value}&end=${$('endDate').value}`;
   } else {
-    url += `range=${currentRange}`;
+    const { start, end } = getDisplayRange();
+    url += `start=${start}&end=${end}`;
   }
   const search = $('searchInput').value.trim();
   if (search) url += `&search=${encodeURIComponent(search)}`;
@@ -252,8 +252,7 @@ function exportCSV() {
   window.location.href = url;
 }
 
-// ===== 刷新(触发采集) =====
-// 重新采集当前选中的日期范围（平台会修正历史数据，刷新时需重采以保证与平台一致）
+// ===== 日期区间 =====
 function getDisplayRange() {
   if (useCustom) {
     return { start: $('startDate').value, end: $('endDate').value };
@@ -262,23 +261,22 @@ function getDisplayRange() {
   const days = { '1d': 1, '3d': 3, '1w': 7, '15d': 15, '1m': 30 }[currentRange] || 7;
   const sd = new Date(today);
   sd.setDate(sd.getDate() - (days - 1));
-  const p = (n) => String(n).padStart(2, '0');
-  const fmt = (d) => `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
-  return { start: fmt(sd), end: fmt(today) };
+  let start = fmt(sd);
+  if (start < START_DATE) start = START_DATE;
+  return { start, end: fmt(today) };
 }
 
+// ===== 刷新(触发采集) =====
 async function refreshData() {
   const btn = $('refreshBtn');
   btn.textContent = '采集中...'; btn.disabled = true;
   try {
-    const { start, end } = getDisplayRange();
     const res = await authFetch('/api/collect', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ start, end }),
+      body: JSON.stringify({}),
     });
     if (!res || !res.ok) {
-      // 服务端可能返回 HTML 错误页（如 Vercel 504），不能直接展示原始 HTML
       let msg = '网络错误';
       try {
         const ct = (res && res.headers.get('content-type')) || '';
@@ -296,10 +294,9 @@ async function refreshData() {
     }
     const json = await res.json();
     if (json.error) throw new Error(json.error);
-    // 采集完成后立即刷新显示（接口同步等待采集结束）
     loadSummary();
     loadStatus();
-    alert(json.message || `采集完成（${start} ~ ${end}），更新了 ${json.count} 条数据`);
+    alert(json.message || '采集完成');
   } catch (e) {
     alert('触发采集失败: ' + e.message);
   } finally {
@@ -308,51 +305,76 @@ async function refreshData() {
   }
 }
 
-// ===== 回填历史数据 =====
-async function doBackfill() {
-  const start = $('backfillStart').value;
-  const end = $('backfillEnd').value;
-  const resultDiv = $('backfillResult');
-  const btn = $('doBackfill');
+// ===== 手动录入 =====
+function openManualModal() {
+  $('mDate').value = fmt(new Date());
+  $('mLabel').value = '';
+  $('mNew').value = '';
+  $('mOld').value = '';
+  $('mSeg').value = '';
+  $('mNoClip').value = '';
+  $('mPass').value = '';
+  $('manualResult').innerHTML = '';
+  $('manualModal').classList.add('show');
+}
 
-  if (!start || !end) {
-    resultDiv.innerHTML = '<span style="color: red;">请选择起止日期</span>';
+async function saveManual() {
+  const body = {
+    date: $('mDate').value,
+    label: $('mLabel').value.trim(),
+    newTaskHours: $('mNew').value,
+    oldTaskHours: $('mOld').value,
+    segmentHours: $('mSeg').value,
+    noClipHours: $('mNoClip').value,
+    passSegmentHours: $('mPass').value,
+  };
+  if (!body.date || !body.label) {
+    $('manualResult').innerHTML = '<span style="color:red;">请填写日期和标注员</span>';
     return;
   }
-  if (start > end) {
-    resultDiv.innerHTML = '<span style="color: red;">起始日期不能晚于结束日期</span>';
-    return;
-  }
-
-  // 检查日期范围不超过7天
-  const diffDays = Math.ceil((new Date(end) - new Date(start)) / (1000 * 60 * 60 * 24)) + 1;
-  if (diffDays > 7) {
-    resultDiv.innerHTML = '<span style="color: red;">每次最多回填7天，请缩小日期范围</span>';
-    return;
-  }
-
-  btn.disabled = true;
-  btn.textContent = '回填中...';
-  resultDiv.innerHTML = `<span style="color: #666;">正在回填 ${start} 至 ${end}（共${diffDays}天），请耐心等待...</span>`;
-
   try {
-    const res = await authFetch(`/api/backfill?start=${start}&end=${end}`);
+    const res = await authFetch('/api/snapshot?mode=manual', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
     if (!res) return;
     const json = await res.json();
-    if (json.ok) {
-      resultDiv.innerHTML = `
-        <div style="color: green; margin-bottom: 8px;">✓ ${json.message}</div>
-        <div style="font-size: 12px; color: #999;">${(json.results || []).map(r => `${r.date}: ${r.count}人${r.error ? ' (错误: ' + r.error + ')' : ''}`).join('；')}</div>
-      `;
-      setTimeout(() => { loadSummary(); loadStatus(); }, 2000);
-    } else {
-      resultDiv.innerHTML = `<span style="color: red;">✗ ${json.error}</span>`;
+    if (!res.ok) {
+      $('manualResult').innerHTML = `<span style="color:red;">保存失败: ${json.error || '未知错误'}</span>`;
+      return;
     }
+    $('manualResult').innerHTML = `<span style="color:green;">✓ ${json.message}</span>`;
+    loadSummary();
   } catch (e) {
-    resultDiv.innerHTML = `<span style="color: red;">✗ 请求失败: ${e.message}</span>`;
-  } finally {
-    btn.disabled = false;
-    btn.textContent = '开始回填';
+    $('manualResult').innerHTML = `<span style="color:red;">保存失败: ${e.message}</span>`;
+  }
+}
+
+async function deleteManual() {
+  const body = {
+    date: $('mDate').value,
+    label: $('mLabel').value.trim(),
+  };
+  if (!body.date || !body.label) {
+    $('manualResult').innerHTML = '<span style="color:red;">请填写日期和标注员</span>';
+    return;
+  }
+  if (!confirm(`确认删除 ${body.label} ${body.date} 的快照记录？`)) return;
+  try {
+    const res = await authFetch('/api/snapshot?mode=manual', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res) return;
+    const json = await res.json();
+    $('manualResult').innerHTML = json.ok
+      ? `<span style="color:green;">✓ ${json.message}</span>`
+      : `<span style="color:red;">删除失败: ${json.error || '未知错误'}</span>`;
+    loadSummary();
+  } catch (e) {
+    $('manualResult').innerHTML = `<span style="color:red;">删除失败: ${e.message}</span>`;
   }
 }
 
@@ -373,7 +395,7 @@ async function loadStatus() {
       const last = json.recent_logs && json.recent_logs[0];
       const dr = json.date_range || {};
       txt.textContent = last
-        ? `数据 ${dr.min} ~ ${dr.max} · 共 ${json.annotator_count} 人 · 最近采集 ${fmtTime(last.created_at)}`
+        ? `快照数据 ${dr.min || '-'} ~ ${dr.max || '-'} · 共 ${json.annotator_count} 人 · 最近采集 ${fmtTime(last.created_at)}`
         : `共 ${json.annotator_count} 人`;
     }
     $('footStatus').textContent = `服务器时间: ${fmtTime(json.server_time)}`;
@@ -385,7 +407,6 @@ async function loadStatus() {
 function fmtTime(iso) {
   if (!iso) return '';
   const d = new Date(iso);
-  const p = (n) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
@@ -408,6 +429,10 @@ $('applyCustom').addEventListener('click', () => {
     alert('请选择起止日期');
     return;
   }
+  if ($('startDate').value < START_DATE) {
+    alert(`新系统仅支持 ${START_DATE} 之后的数据`);
+    return;
+  }
   document.querySelectorAll('#rangeBtns button').forEach((b) => b.classList.remove('active'));
   useCustom = true;
   loadSummary();
@@ -427,30 +452,19 @@ $('detailModal').addEventListener('click', (e) => {
   if (e.target === $('detailModal')) $('detailModal').classList.remove('show');
 });
 
-// 回填弹窗事件
-$('backfillBtn').addEventListener('click', () => {
-  // 默认填入最近7天
-  const today = new Date();
-  const week = new Date(today);
-  week.setDate(week.getDate() - 6);
-  const p = (n) => String(n).padStart(2, '0');
-  $('backfillStart').value = `${week.getFullYear()}-${p(week.getMonth() + 1)}-${p(week.getDate())}`;
-  $('backfillEnd').value = `${today.getFullYear()}-${p(today.getMonth() + 1)}-${p(today.getDate())}`;
-  $('backfillResult').innerHTML = '';
-  $('backfillModal').classList.add('show');
+// 手动录入事件
+$('manualBtn').addEventListener('click', openManualModal);
+$('closeManual').addEventListener('click', () => $('manualModal').classList.remove('show'));
+$('manualModal').addEventListener('click', (e) => {
+  if (e.target === $('manualModal')) $('manualModal').classList.remove('show');
 });
-$('closeBackfill').addEventListener('click', () => $('backfillModal').classList.remove('show'));
-$('backfillModal').addEventListener('click', (e) => {
-  if (e.target === $('backfillModal')) $('backfillModal').classList.remove('show');
-});
-$('doBackfill').addEventListener('click', doBackfill);
+$('mSave').addEventListener('click', saveManual);
+$('mDelete').addEventListener('click', deleteManual);
 
 // ===== 初始化 =====
 const today = new Date();
-const p = (n) => String(n).padStart(2, '0');
-const todayStr = `${today.getFullYear()}-${p(today.getMonth() + 1)}-${p(today.getDate())}`;
-$('startDate').value = todayStr;
-$('endDate').value = todayStr;
+$('startDate').value = START_DATE;
+$('endDate').value = fmt(today);
 
 loadSummary();
 loadStatus();
