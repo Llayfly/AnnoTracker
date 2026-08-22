@@ -9,7 +9,13 @@ module.exports = requireAuth(async (req, res) => {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   try {
     await ensureInit();
-    const migration = await migrateLabels();
+    // 标签迁移失败不应阻塞刷新（每日 cron 会重试），这里仅尽力而为
+    let migration = null;
+    try {
+      migration = await migrateLabels();
+    } catch (e) {
+      console.error('[api] migrateLabels error:', e.message);
+    }
 
     let count;
     let message;

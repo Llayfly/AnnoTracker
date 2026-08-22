@@ -278,8 +278,20 @@ async function refreshData() {
       body: JSON.stringify({ start, end }),
     });
     if (!res || !res.ok) {
-      const errText = res ? await res.text() : '网络错误';
-      alert('采集失败: ' + errText);
+      // 服务端可能返回 HTML 错误页（如 Vercel 504），不能直接展示原始 HTML
+      let msg = '网络错误';
+      try {
+        const ct = (res && res.headers.get('content-type')) || '';
+        if (ct.includes('application/json')) {
+          const j = await res.json();
+          msg = j.error || `HTTP ${res.status}`;
+        } else {
+          msg = `服务异常（HTTP ${res.status}），请稍后重试`;
+        }
+      } catch (e) {
+        msg = `服务异常（HTTP ${res.status}）`;
+      }
+      alert('采集失败: ' + msg);
       return;
     }
     const json = await res.json();
@@ -287,7 +299,7 @@ async function refreshData() {
     // 采集完成后立即刷新显示（接口同步等待采集结束）
     loadSummary();
     loadStatus();
-    alert(`采集完成（${start} ~ ${end}），更新了 ${json.count} 条数据`);
+    alert(json.message || `采集完成（${start} ~ ${end}），更新了 ${json.count} 条数据`);
   } catch (e) {
     alert('触发采集失败: ' + e.message);
   } finally {
