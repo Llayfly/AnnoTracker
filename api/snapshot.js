@@ -190,6 +190,7 @@ module.exports = requireAuth(async (req, res) => {
 
     const { start, end } = getRange(req.query);
     const search = req.query.search ? `%${req.query.search.trim()}%` : '%';
+    const period = req.query.period || 'all'; // all | old | new
 
     // ===== 明细 =====
     if (mode === 'detail') {
@@ -234,8 +235,8 @@ module.exports = requireAuth(async (req, res) => {
       };
 
       const daily = [
-        ...oldResult.rows.filter((r) => r.date >= start && r.date <= end).map((r) => mapRow(r, 'old')),
-        ...newResult.rows.filter((r) => r.date >= start && r.date <= end).map((r) => mapRow(r, r.source)),
+        ...(period === 'new' ? [] : oldResult.rows.filter((r) => r.date >= start && r.date <= end).map((r) => mapRow(r, 'old'))),
+        ...(period === 'old' ? [] : newResult.rows.filter((r) => r.date >= start && r.date <= end).map((r) => mapRow(r, r.source))),
       ].sort((a, b) => (a.date < b.date ? -1 : 1));
 
       return res.json({ label: annotator.label, raw_label: annotator.raw_label, range: { start, end }, daily });
@@ -243,8 +244,8 @@ module.exports = requireAuth(async (req, res) => {
 
     // ===== 导出 CSV =====
     if (mode === 'export') {
-      const oldData = await queryOldSummary(db, start, end, search);
-      const newData = await querySummary(db, start, end, search);
+      const oldData = period === 'new' ? [] : await queryOldSummary(db, start, end, search);
+      const newData = period === 'old' ? [] : await querySummary(db, start, end, search);
       const lines = [];
       if (oldData.length) {
         const oldEnd = end < OLD_END ? end : OLD_END;
@@ -270,8 +271,8 @@ module.exports = requireAuth(async (req, res) => {
     }
 
     // ===== 汇总（默认）=====
-    const oldData = await queryOldSummary(db, start, end, search);
-    const newData = await querySummary(db, start, end, search);
+    const oldData = period === 'new' ? [] : await queryOldSummary(db, start, end, search);
+    const newData = period === 'old' ? [] : await querySummary(db, start, end, search);
     res.json({ range: { start, end }, old: oldData, new: newData, count: oldData.length + newData.length });
   } catch (e) {
     console.error('[api] snapshot error:', e);

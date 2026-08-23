@@ -100,6 +100,11 @@
         <button id="applyCustom">查询</button>
       </div>
       <div class="search-box">
+        <select id="periodFilter" style="padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:13px;margin-right:8px;">
+          <option value="all">全部数据</option>
+          <option value="old">仅历史(8/22前)</option>
+          <option value="new">仅新数据(8/23起)</option>
+        </select>
         <input type="text" id="searchInput" placeholder="按标注员名称搜索..." />
       </div>
       <div class="actions">
@@ -166,7 +171,7 @@
           <input type="text" id="mLabel" placeholder="如 HC8" />
         </div>
         <div class="form-group">
-          <label>新任务(h)</label>
+          <label>新任务(h)（必填）</label>
           <input type="number" id="mNew" step="0.01" min="0" placeholder="0.00" />
         </div>
         <div class="form-group">
@@ -174,19 +179,19 @@
           <input type="number" id="mOld" step="0.01" min="0" placeholder="0.00" />
         </div>
         <div class="form-group">
-          <label>片段时长(h)</label>
+          <label>片段时长(h)（选填）</label>
           <input type="number" id="mSeg" step="0.01" min="0" placeholder="0.00" />
         </div>
         <div class="form-group">
-          <label>无片段(h)</label>
+          <label>无片段(h)（选填）</label>
           <input type="number" id="mNoClip" step="0.01" min="0" placeholder="0.00" />
         </div>
         <div class="form-group full">
-          <label>PASS片段(h)</label>
+          <label>PASS片段(h)（选填）</label>
           <input type="number" id="mPass" step="0.01" min="0" placeholder="0.00" />
         </div>
       </div>
-      <div class="manual-tip">提示：原始时长自动 = 新任务时长。无片段等效按 0.2 系数计算，结算参考 = PASS片段 + 无片段等效。</div>
+      <div class="manual-tip">必填：日期、标注员、新任务时长。片段时长 / 无片段 / PASS片段 均为选填，留空按 0 处理。原始时长自动 = 新任务时长；无片段等效按 0.2 系数计算，结算参考 = PASS片段 + 无片段等效。</div>
       <div class="manual-actions">
         <button class="btn-del" id="mDelete">删除该记录</button>
         <button class="btn-save" id="mSave">保存</button>
@@ -199,6 +204,6 @@
     <span id="footStatus"></span>
   </footer>
 
-  <script src="app.js?v=20260823"></script>
+  <script src="app.js?v=20260823b"></script>
 </body>
 </html>

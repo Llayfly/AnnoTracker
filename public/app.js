@@ -83,6 +83,7 @@ const OLD_COLUMNS = [
   { title: '片段时长(h)', field: 'segment_hours' },
   {
     title: 'PASS占比',
+    render: (r) => (Number(r.pass_ratio) || 0) + '%',
     total: (items) => {
       const s = items.reduce((a, r) => a + (Number(r.raw_hours) || 0), 0);
       const seg = items.reduce((a, r) => a + (Number(r.segment_hours) || 0), 0);
@@ -92,6 +93,7 @@ const OLD_COLUMNS = [
   { title: '累计参考(h)', field: 'cumulative_reference_hours' },
   {
     title: '日均新任务(h)',
+    render: (r) => (Number(r.daily_avg_raw_hours) || 0),
     total: (items) => {
       const totNew = items.reduce((a, r) => a + (Number(r.new_task_hours) || 0), 0);
       const maxDays = Math.max(...items.map((i) => Number(i.active_days) || 0), 1);
@@ -109,6 +111,7 @@ const NEW_COLUMNS = [
   { title: '片段时长(h)', field: 'segment_hours' },
   {
     title: 'PASS占比',
+    render: (r) => (Number(r.pass_ratio) || 0) + '%',
     total: (items) => {
       const s = items.reduce((a, r) => a + (Number(r.raw_hours) || 0), 0);
       const seg = items.reduce((a, r) => a + (Number(r.segment_hours) || 0), 0);
@@ -116,7 +119,7 @@ const NEW_COLUMNS = [
     },
   },
   { title: '结算参考(h)', field: 'settlement_reference_hours' },
-  { title: '日均新任务(h)', total: () => '-' },
+  { title: '日均新任务(h)', render: (r) => (Number(r.daily_avg_raw_hours) || 0), total: () => '-' },
 ];
 
 // 渲染一组标注员：柱状图 + 分组织表格
@@ -199,6 +202,8 @@ async function loadSummary() {
   }
   const search = $('searchInput').value.trim();
   if (search) url += `&search=${encodeURIComponent(search)}`;
+  const period = $('periodFilter').value;
+  if (period && period !== 'all') url += `&period=${period}`;
 
   try {
     const res = await authFetch(url);
@@ -215,7 +220,7 @@ async function loadSummary() {
 
     let html = '';
     if (oldRows.length) {
-      html += `<div class="section-divider">历史数据（2026-08-22 及之前）· 原始时长 = 新任务 + 旧任务</div>`;
+      html += `<div class="section-divider old">历史数据（2026-08-22 及之前）· 原始时长 = 新任务 + 旧任务</div>`;
       html += renderGroups(oldRows, {
         chartField: 'new_task_hours',
         chartTitle: '新任务',
@@ -223,7 +228,7 @@ async function loadSummary() {
       });
     }
     if (newRows.length) {
-      html += `<div class="section-divider">新数据（2026-08-23 起）· 原始时长 = 新任务之和</div>`;
+      html += `<div class="section-divider new">新数据（2026-08-23 起）· 原始时长 = 新任务之和</div>`;
       html += renderGroups(newRows, {
         chartField: 'raw_hours',
         chartTitle: '原始时长',
@@ -305,6 +310,8 @@ function exportCSV() {
   }
   const search = $('searchInput').value.trim();
   if (search) url += `&search=${encodeURIComponent(search)}`;
+  const period = $('periodFilter').value;
+  if (period && period !== 'all') url += `&period=${period}`;
   url += `&token=${encodeURIComponent(token)}`;
   window.location.href = url;
 }
@@ -496,6 +503,8 @@ $('searchInput').addEventListener('input', () => {
   clearTimeout(searchTimer);
   searchTimer = setTimeout(loadSummary, 350);
 });
+
+$('periodFilter').addEventListener('change', loadSummary);
 
 $('exportBtn').addEventListener('click', exportCSV);
 $('refreshBtn').addEventListener('click', refreshData);
