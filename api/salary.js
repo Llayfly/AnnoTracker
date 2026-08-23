@@ -61,17 +61,24 @@ module.exports = requireAuth(async (req, res) => {
     const db = getDb();
     const { start, end } = getMonthRange(req.query);
 
-    // 原始时长 = 每天新任务时长的累加（不含旧任务）
+    // 原始时长 = 每天（新任务 + 旧任务）时长的累加
+    // 数据源：daily_stats（2026-08-22 及之前）+ daily_snapshots（2026-08-23 起）合并
     const result = await db.execute({
       sql: `SELECT
         a.id, a.label,
-        COALESCE(SUM(d.new_task_raw_seconds), 0) AS raw_seconds,
+        COALESCE(SUM(d.new_task_raw_seconds), 0) + COALESCE(SUM(d.old_task_raw_seconds), 0) AS raw_seconds,
         COALESCE(SUM(d.settlement_reference_seconds), 0) AS settlement_seconds,
         COALESCE(SUM(d.new_task_raw_seconds), 0) AS new_task_seconds,
         COALESCE(SUM(d.old_task_raw_seconds), 0) AS old_task_seconds,
         COUNT(d.date) AS active_days
       FROM annotators a
-      LEFT JOIN daily_stats d ON d.annotator_id = a.id AND d.date >= ? AND d.date <= ?
+      LEFT JOIN (
+        SELECT annotator_id, date, new_task_raw_seconds, old_task_raw_seconds, settlement_reference_seconds
+        FROM daily_stats
+        UNION ALL
+        SELECT annotator_id, date, new_task_raw_seconds, old_task_raw_seconds, settlement_reference_seconds
+        FROM daily_snapshots
+      ) d ON d.annotator_id = a.id AND d.date >= ? AND d.date <= ?
       GROUP BY a.id
       HAVING active_days > 0
       ORDER BY raw_seconds DESC`,
