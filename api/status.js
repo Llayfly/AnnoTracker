@@ -7,10 +7,11 @@ module.exports = requireAuth(async (req, res) => {
   try {
     await ensureInit();
     const db = getDb();
-    // 用 batch 合并 3 次查询为 1 次网络往返
+    // 用 batch 合并 4 次查询为 1 次网络往返
     const results = await db.batch([
       'SELECT COUNT(*) AS c FROM annotators',
       'SELECT MIN(date) AS min, MAX(date) AS max FROM daily_snapshots',
+      'SELECT MIN(date) AS min, MAX(date) AS max FROM daily_stats',
       'SELECT * FROM collection_log ORDER BY created_at DESC LIMIT 10',
     ], 'read');
 
@@ -18,7 +19,8 @@ module.exports = requireAuth(async (req, res) => {
       collecting: false,
       annotator_count: results[0].rows[0].c,
       date_range: results[1].rows[0],
-      recent_logs: results[2].rows,
+      old_date_range: results[2].rows[0],
+      recent_logs: results[3].rows,
       server_time: new Date().toISOString(),
     });
   } catch (e) {

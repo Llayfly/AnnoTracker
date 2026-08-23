@@ -28,6 +28,11 @@
     .src-badge { display: inline-block; padding: 1px 6px; border-radius: 4px; font-size: 11px; font-weight: 600; }
     .src-auto { background: #e8eaf6; color: #3949ab; }
     .src-manual { background: #fff3e0; color: #e65100; }
+    .src-old { background: #e0e0e0; color: #424242; }
+    .section-divider {
+      margin: 4px 0 8px; padding: 8px 12px; border-left: 4px solid var(--primary);
+      background: #f0f6ff; color: #1e3a8a; font-size: 14px; font-weight: 700; border-radius: 4px;
+    }
     .manual-form { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; padding: 16px 20px; }
     .manual-form .form-group { margin-bottom: 0; }
     .manual-form .full { grid-column: 1 / -1; }
@@ -74,8 +79,9 @@
     </div>
 
     <div class="note-banner">
-      数据说明：自 <strong>2026-08-23</strong> 起，系统于每日 <strong>23:59</strong> 自动采集平台单日数据。
-      原始时长 = 新任务时长之和，同时展示旧任务、片段时长、PASS 占比等指标。支持手动录入当日数据。
+      数据说明：<strong>2026-08-22 及之前</strong>为历史数据（原始时长 = 新任务 + 旧任务）；
+      自 <strong>2026-08-23</strong> 起每日 <strong>23:59</strong> 自动采集单日数据（原始时长 = 新任务之和）。
+      支持手动录入当日数据。
     </div>
 
     <!-- 控制面板 -->

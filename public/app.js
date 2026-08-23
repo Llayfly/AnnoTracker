@@ -43,7 +43,6 @@ if (currentUser) {
 }
 
 // ===== 业务逻辑 =====
-const START_DATE = '2026-08-23';
 let currentRange = '1w';
 let useCustom = false;
 
@@ -72,6 +71,121 @@ const groupConfig = {
   other: { title: '其他', cls: 'group-other' },
 };
 
+const r2 = (n) => Math.round(n * 100) / 100;
+
+// 历史数据列（2026-08-22 及之前，原始时长 = 新任务 + 旧任务）
+const OLD_COLUMNS = [
+  { title: '排名', w: '40px' },
+  { title: '标注员' },
+  { title: '原始时长(h)', field: 'raw_hours' },
+  { title: '新任务(h)', field: 'new_task_hours' },
+  { title: '旧任务(h)', field: 'old_task_hours' },
+  { title: '片段时长(h)', field: 'segment_hours' },
+  {
+    title: 'PASS占比',
+    total: (items) => {
+      const s = items.reduce((a, r) => a + (Number(r.raw_hours) || 0), 0);
+      const seg = items.reduce((a, r) => a + (Number(r.segment_hours) || 0), 0);
+      return s > 0 ? Math.round(seg / s * 1000) / 10 + '%' : '0%';
+    },
+  },
+  { title: '累计参考(h)', field: 'cumulative_reference_hours' },
+  {
+    title: '日均新任务(h)',
+    total: (items) => {
+      const totNew = items.reduce((a, r) => a + (Number(r.new_task_hours) || 0), 0);
+      const maxDays = Math.max(...items.map((i) => Number(i.active_days) || 0), 1);
+      return r2(totNew / maxDays);
+    },
+  },
+];
+
+// 新数据列（2026-08-23 起，原始时长 = 新任务之和）
+const NEW_COLUMNS = [
+  { title: '排名', w: '40px' },
+  { title: '标注员' },
+  { title: '原始时长(h)', field: 'raw_hours' },
+  { title: '旧任务(h)', field: 'old_task_hours' },
+  { title: '片段时长(h)', field: 'segment_hours' },
+  {
+    title: 'PASS占比',
+    total: (items) => {
+      const s = items.reduce((a, r) => a + (Number(r.raw_hours) || 0), 0);
+      const seg = items.reduce((a, r) => a + (Number(r.segment_hours) || 0), 0);
+      return s > 0 ? Math.round(seg / s * 1000) / 10 + '%' : '0%';
+    },
+  },
+  { title: '结算参考(h)', field: 'settlement_reference_hours' },
+  { title: '日均新任务(h)', total: () => '-' },
+];
+
+// 渲染一组标注员：柱状图 + 分组织表格
+function renderGroups(rows, opts) {
+  if (!rows.length) return '';
+  rows.forEach((r, i) => { r._rank = i + 1; });
+  const groups = { HC: [], C: [], HBHC: [], S: [], JS: [], other: [] };
+  rows.forEach((r) => { groups[getGroup(r.label)].push(r); });
+
+  let html = '';
+  for (const [gkey, items] of Object.entries(groups)) {
+    if (!items.length) continue;
+    const cfg = groupConfig[gkey];
+    html += `<div class="group-section">`;
+    html += `<div class="group-title ${cfg.cls}">${cfg.title}（${items.length} 人）</div>`;
+
+    // 柱状图：每个标注员的时长（降序）
+    const chartField = opts.chartField || 'raw_hours';
+    const chartItems = items.slice().sort((a, b) => (Number(b[chartField]) || 0) - (Number(a[chartField]) || 0));
+    const maxV = Math.max(...chartItems.map((i) => Number(i[chartField]) || 0), 0.001);
+    html += `<div class="group-chart">`;
+    html += chartItems.map((r) => {
+      const v = Number(r[chartField]) || 0;
+      const pct = Math.max(Math.round(v / maxV * 100), v > 0 ? 2 : 0);
+      return `<div class="chart-row" title="${r.label} ${opts.chartTitle} ${v} h">
+        <span class="chart-label">${r.label}</span>
+        <div class="chart-track"><div class="chart-bar" style="width:${pct}%"></div></div>
+        <span class="chart-value">${v}</span>
+      </div>`;
+    }).join('');
+    html += `</div>`;
+
+    // 表格
+    html += `<div class="table-wrap"><table style="width:100%;font-size:13px;table-layout:fixed;border-collapse:collapse;">
+      <thead><tr>`;
+    html += opts.columns.map((c) => `<th style="${c.w ? 'width:' + c.w + ';' : ''}">${c.title}</th>`).join('');
+    html += `</tr></thead><tbody>`;
+
+    items.forEach((r) => {
+      const rank = r._rank;
+      const rankCls = rank <= 3 ? `rank-${rank}` : '';
+      html += `<tr data-label="${r.label}">`;
+      html += `<td class="rank-cell ${rankCls}">${rank}</td>`;
+      html += `<td><strong>${r.label}</strong></td>`;
+      for (const c of opts.columns.slice(2)) {
+        html += `<td class="num">${c.render ? c.render(r) : r[c.field]}</td>`;
+      }
+      html += `</tr>`;
+    });
+
+    // 组织合计
+    html += `<tr style="background:#f0f0f0;font-weight:700;border-top:2px solid #999;">
+      <td></td><td>${gkey} 合计</td>`;
+    for (const c of opts.columns.slice(2)) {
+      if (c.total) {
+        html += `<td class="num">${c.total(items)}</td>`;
+      } else if (c.field) {
+        html += `<td class="num">${r2(items.reduce((s, r) => s + (Number(r[c.field]) || 0), 0))}</td>`;
+      } else {
+        html += `<td class="num"></td>`;
+      }
+    }
+    html += `</tr>`;
+
+    html += '</tbody></table></div></div>';
+  }
+  return html;
+}
+
 // ===== 汇总数据 =====
 async function loadSummary() {
   const container = $('summaryContainer');
@@ -90,98 +204,37 @@ async function loadSummary() {
     const res = await authFetch(url);
     if (!res) return;
     const json = await res.json();
-    if (!json || !json.data) {
-      container.innerHTML = `<p class="empty">${(json && json.error) ? '加载失败: ' + json.error : '暂无数据'}</p>`;
+    if (!json) {
+      container.innerHTML = '<p class="empty">暂无数据</p>';
       return;
     }
     $('rangeLabel').textContent = `（${json.range.start} 至 ${json.range.end}）`;
-    $('totalCount').textContent = `共 ${json.count} 人`;
-    if (!json.data.length) {
-      container.innerHTML = '<p class="empty">该区间暂无数据（数据自 2026-08-23 起每日 23:59 采集）</p>';
-      return;
-    }
-
-    // 全局排名
-    json.data.forEach((r, i) => { r._rank = i + 1; });
-
-    // 分组
-    const groups = { HC: [], C: [], HBHC: [], S: [], JS: [], other: [] };
-    json.data.forEach((r) => {
-      groups[getGroup(r.label)].push(r);
-    });
+    const oldRows = json.old || [];
+    const newRows = json.new || [];
+    $('totalCount').textContent = `共 ${oldRows.length + newRows.length} 人`;
 
     let html = '';
-    for (const [gkey, items] of Object.entries(groups)) {
-      if (!items.length) continue;
-      const cfg = groupConfig[gkey];
-      html += `<div class="group-section">`;
-      html += `<div class="group-title ${cfg.cls}">${cfg.title}（${items.length} 人）</div>`;
-
-      // 柱状图：每个标注员的新任务时长（原始时长，降序）
-      const chartItems = items.slice().sort((a, b) => (Number(b.raw_hours) || 0) - (Number(a.raw_hours) || 0));
-      const maxNew = Math.max(...chartItems.map((i) => Number(i.raw_hours) || 0), 0.001);
-      html += `<div class="group-chart">`;
-      html += chartItems.map((r) => {
-        const v = Number(r.raw_hours) || 0;
-        const pct = Math.max(Math.round(v / maxNew * 100), v > 0 ? 2 : 0);
-        return `<div class="chart-row" title="${r.label} 原始时长 ${v} h">
-          <span class="chart-label">${r.label}</span>
-          <div class="chart-track"><div class="chart-bar" style="width:${pct}%"></div></div>
-          <span class="chart-value">${v}</span>
-        </div>`;
-      }).join('');
-      html += `</div>`;
-
-      html += `<div class="table-wrap"><table style="width:100%;font-size:13px;table-layout:fixed;border-collapse:collapse;">
-        <thead><tr>
-          <th style="width:40px;">排名</th>
-          <th>标注员</th>
-          <th>原始时长(h)</th>
-          <th>旧任务(h)</th>
-          <th>片段时长(h)</th>
-          <th>PASS占比</th>
-          <th>结算参考(h)</th>
-          <th>日均新任务(h)</th>
-        </tr></thead><tbody>`;
-
-      items.forEach((r) => {
-        const rank = r._rank;
-        const rankCls = rank <= 3 ? `rank-${rank}` : '';
-        html += `<tr data-label="${r.label}">
-          <td class="rank-cell ${rankCls}">${rank}</td>
-          <td><strong>${r.label}</strong></td>
-          <td class="num"><strong>${r.raw_hours}</strong></td>
-          <td class="num">${r.old_task_hours}</td>
-          <td class="num">${r.segment_hours}</td>
-          <td class="num">${r.pass_ratio}%</td>
-          <td class="num">${r.settlement_reference_hours}</td>
-          <td class="num">${r.daily_avg_raw_hours}</td>
-        </tr>`;
+    if (oldRows.length) {
+      html += `<div class="section-divider">历史数据（2026-08-22 及之前）· 原始时长 = 新任务 + 旧任务</div>`;
+      html += renderGroups(oldRows, {
+        chartField: 'new_task_hours',
+        chartTitle: '新任务',
+        columns: OLD_COLUMNS,
       });
-
-      // 组织合计
-      const sum = (key) => items.reduce((s, r) => s + (Number(r[key]) || 0), 0);
-      const totRaw = sum('raw_hours');
-      const totOld = sum('old_task_hours');
-      const totSeg = sum('segment_hours');
-      const totSettle = sum('settlement_reference_hours');
-      const avgPass = totRaw > 0 ? Math.round(totSeg / totRaw * 1000) / 10 : 0;
-      const r2 = (n) => Math.round(n * 100) / 100;
-      html += `<tr style="background:#f0f0f0;font-weight:700;border-top:2px solid #999;">
-        <td></td>
-        <td>${gkey} 合计</td>
-        <td class="num">${r2(totRaw)}</td>
-        <td class="num">${r2(totOld)}</td>
-        <td class="num">${r2(totSeg)}</td>
-        <td class="num">${avgPass}%</td>
-        <td class="num">${r2(totSettle)}</td>
-        <td class="num">-</td>
-      </tr>`;
-
-      html += '</tbody></table></div></div>';
     }
-
-    container.innerHTML = html || '<p class="empty">暂无数据</p>';
+    if (newRows.length) {
+      html += `<div class="section-divider">新数据（2026-08-23 起）· 原始时长 = 新任务之和</div>`;
+      html += renderGroups(newRows, {
+        chartField: 'raw_hours',
+        chartTitle: '原始时长',
+        columns: NEW_COLUMNS,
+      });
+    }
+    if (!html) {
+      container.innerHTML = '<p class="empty">该区间暂无数据</p>';
+      return;
+    }
+    container.innerHTML = html;
     container.querySelectorAll('tr[data-label]').forEach((tr) => {
       tr.addEventListener('click', () => openDetail(tr.dataset.label));
     });
@@ -215,18 +268,22 @@ async function openDetail(label) {
       $('detailBody').innerHTML = '<tr><td colspan="8" class="empty">该区间暂无数据</td></tr>';
       return;
     }
-    $('detailBody').innerHTML = json.daily.map((d) => `
-      <tr>
-        <td>${d.date}</td>
-        <td class="num"><strong>${d.raw_hours}</strong></td>
-        <td class="num">${d.new_task_hours}</td>
-        <td class="num">${d.old_task_hours}</td>
-        <td class="num">${d.segment_hours}</td>
-        <td class="num">${d.pass_ratio}%</td>
-        <td class="num">${d.settlement_reference_hours}</td>
-        <td><span class="src-badge ${d.source === 'manual' ? 'src-manual' : 'src-auto'}">${d.source === 'manual' ? '手动' : '自动'}</span></td>
-      </tr>
-    `).join('');
+    $('detailBody').innerHTML = json.daily.map((d) => {
+      const srcText = d.source === 'old' ? '历史' : (d.source === 'manual' ? '手动' : '自动');
+      const srcCls = d.source === 'old' ? 'src-old' : (d.source === 'manual' ? 'src-manual' : 'src-auto');
+      return `
+        <tr>
+          <td>${d.date}</td>
+          <td class="num"><strong>${d.raw_hours}</strong></td>
+          <td class="num">${d.new_task_hours}</td>
+          <td class="num">${d.old_task_hours}</td>
+          <td class="num">${d.segment_hours}</td>
+          <td class="num">${d.pass_ratio}%</td>
+          <td class="num">${d.settlement_reference_hours}</td>
+          <td><span class="src-badge ${srcCls}">${srcText}</span></td>
+        </tr>
+      `;
+    }).join('');
   } catch (e) {
     $('detailBody').innerHTML = `<tr><td colspan="8" class="empty">加载失败: ${e.message}</td></tr>`;
   }
@@ -261,9 +318,7 @@ function getDisplayRange() {
   const days = { '1d': 1, '3d': 3, '1w': 7, '15d': 15, '1m': 30 }[currentRange] || 7;
   const sd = new Date(today);
   sd.setDate(sd.getDate() - (days - 1));
-  let start = fmt(sd);
-  if (start < START_DATE) start = START_DATE;
-  return { start, end: fmt(today) };
+  return { start: fmt(sd), end: fmt(today) };
 }
 
 // ===== 刷新(触发采集) =====
@@ -394,8 +449,10 @@ async function loadStatus() {
       dot.className = 'dot live';
       const last = json.recent_logs && json.recent_logs[0];
       const dr = json.date_range || {};
+      const odr = json.old_date_range || {};
+      const rangeText = (odr.min ? `历史 ${odr.min}~${odr.max} · ` : '') + `新数据 ${dr.min || '-'}~${dr.max || '-'}`;
       txt.textContent = last
-        ? `快照数据 ${dr.min || '-'} ~ ${dr.max || '-'} · 共 ${json.annotator_count} 人 · 最近采集 ${fmtTime(last.created_at)}`
+        ? `${rangeText} · 共 ${json.annotator_count} 人 · 最近采集 ${fmtTime(last.created_at)}`
         : `共 ${json.annotator_count} 人`;
     }
     $('footStatus').textContent = `服务器时间: ${fmtTime(json.server_time)}`;
@@ -429,10 +486,6 @@ $('applyCustom').addEventListener('click', () => {
     alert('请选择起止日期');
     return;
   }
-  if ($('startDate').value < START_DATE) {
-    alert(`新系统仅支持 ${START_DATE} 之后的数据`);
-    return;
-  }
   document.querySelectorAll('#rangeBtns button').forEach((b) => b.classList.remove('active'));
   useCustom = true;
   loadSummary();
@@ -463,7 +516,9 @@ $('mDelete').addEventListener('click', deleteManual);
 
 // ===== 初始化 =====
 const today = new Date();
-$('startDate').value = START_DATE;
+const weekAgo = new Date(today);
+weekAgo.setDate(weekAgo.getDate() - 6);
+$('startDate').value = fmt(weekAgo);
 $('endDate').value = fmt(today);
 
 loadSummary();
