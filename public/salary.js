@@ -42,13 +42,10 @@ function renderGroup(groupKey, rows) {
 
   // 计算小计
   const totalRaw = rows.reduce((s, r) => s + r.salary_raw, 0);
-  const totalSettlement = rows.reduce((s, r) => s + r.salary_settlement, 0);
   const totalRawHours = rows.reduce((s, r) => s + r.raw_hours, 0);
   const totalSettlementHours = rows.reduce((s, r) => s + r.settlement_hours, 0);
 
   const rowsHtml = rows.map((r) => {
-    const rawClass = r.recommended === 'raw' ? 'salary-high' : 'salary-low';
-    const settleClass = r.recommended === 'settlement' ? 'salary-high' : 'salary-low';
     return `
       <tr class="${r.priority ? 'priority-row' : ''}">
         <td>${r.label}</td>
@@ -56,11 +53,7 @@ function renderGroup(groupKey, rows) {
         <td class="num">${r.settlement_hours}</td>
         <td class="num">${r.new_task_hours}</td>
         <td class="num">${r.old_task_hours}</td>
-        <td class="num ${rawClass}">¥${r.salary_raw}</td>
-        <td class="num ${settleClass}">¥${r.salary_settlement}</td>
-        <td class="num" style="color:${r.salary_diff >= 0 ? '#2e7d32' : '#c62828'};">
-          ${r.salary_diff >= 0 ? '+' : ''}¥${r.salary_diff}
-        </td>
+        <td class="num salary-high">¥${r.salary_raw}</td>
       </tr>
     `;
   }).join('');
@@ -79,9 +72,7 @@ function renderGroup(groupKey, rows) {
               <th>结算参考(h)</th>
               <th>新任务(h)</th>
               <th>旧任务(h)</th>
-              <th>方式一<br/><small>原始阶梯</small></th>
-              <th>方式二<br/><small>结算32/h</small></th>
-              <th>差额<br/><small>二-一</small></th>
+              <th>薪资(元)</th>
             </tr>
           </thead>
           <tbody>
@@ -93,10 +84,6 @@ function renderGroup(groupKey, rows) {
               <td class="num">-</td>
               <td class="num">-</td>
               <td class="num">¥${Math.round(totalRaw * 100) / 100}</td>
-              <td class="num">¥${Math.round(totalSettlement * 100) / 100}</td>
-              <td class="num" style="color:${totalSettlement - totalRaw >= 0 ? '#2e7d32' : '#c62828'};">
-                ${totalSettlement - totalRaw >= 0 ? '+' : ''}¥${Math.round((totalSettlement - totalRaw) * 100) / 100}
-              </td>
             </tr>
           </tbody>
         </table>
@@ -124,18 +111,16 @@ async function loadSalary() {
 
     $('totalCount').textContent = `${json.count} 人`;
 
-    let totalRaw = 0, totalSettlement = 0;
+    let totalRaw = 0;
     const groups = json.groups;
     const search = ($('searchInput') ? $('searchInput').value.trim().toLowerCase() : '');
     for (const key of ['HC', 'C', 'HBHC', 'S', 'JS', 'OTHER']) {
       for (const r of groups[key]) {
         if (search && !r.label.toLowerCase().includes(search)) continue;
         totalRaw += r.salary_raw;
-        totalSettlement += r.salary_settlement;
       }
     }
     $('totalSalaryRaw').textContent = `¥${Math.round(totalRaw * 100) / 100}`;
-    $('totalSalarySettlement').textContent = `¥${Math.round(totalSettlement * 100) / 100}`;
 
     let html = '';
     for (const key of ['HC', 'C', 'HBHC', 'S', 'JS', 'OTHER']) {

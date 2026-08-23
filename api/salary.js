@@ -1,7 +1,6 @@
 'use strict';
 // GET /api/salary —— 薪资计算
-// 方式一：按原始时长阶梯计价 0-130h@16, 130-182h@19, >182h@21.8
-// 方式二：按结算参考 32/h
+// 按原始时长阶梯计价 0-130h@16, 130-182h@19, >182h@21.8
 const { getDb, ensureInit } = require('../lib/db');
 const { requireAuth } = require('../lib/auth');
 
@@ -31,7 +30,7 @@ function getMonthRange(query) {
   return { start, end };
 }
 
-// 方式一：按原始时长阶梯累计
+// 按原始时长阶梯累计
 function calcRawSalary(rawHours) {
   if (rawHours <= 130) {
     return Math.round(rawHours * 16 * 100) / 100;
@@ -40,11 +39,6 @@ function calcRawSalary(rawHours) {
   } else {
     return Math.round((130 * 16 + 52 * 19 + (rawHours - 182) * 21.8) * 100) / 100;
   }
-}
-
-// 方式二：按结算参考 32/h
-function calcSettlementSalary(settlementHours) {
-  return Math.round(settlementHours * 32 * 100) / 100;
 }
 
 // 分组：HC / C / HBHC / S / JS / 其他（大小写不敏感）
@@ -89,8 +83,7 @@ module.exports = requireAuth(async (req, res) => {
       const settlementHours = s2h(r.settlement_seconds);
       const newTaskHours = s2h(r.new_task_seconds);
       const oldTaskHours = s2h(r.old_task_seconds);
-      const salary1 = calcRawSalary(rawHours);
-      const salary2 = calcSettlementSalary(settlementHours);
+      const salary = calcRawSalary(rawHours);
       return {
         label: r.label,
         raw_hours: rawHours,
@@ -98,10 +91,7 @@ module.exports = requireAuth(async (req, res) => {
         new_task_hours: newTaskHours,
         old_task_hours: oldTaskHours,
         active_days: r.active_days,
-        salary_raw: salary1,
-        salary_settlement: salary2,
-        salary_diff: Math.round((salary2 - salary1) * 100) / 100,
-        recommended: salary2 >= salary1 ? 'settlement' : 'raw',
+        salary_raw: salary,
         group: getGroup(r.label),
         priority: PRIORITY.includes(r.label),
       };

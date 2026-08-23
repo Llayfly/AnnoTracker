@@ -59,9 +59,11 @@ async function loadBatches() {
 
   let url = '/api/batches?';
   const params = [];
+  const filterAnnotator = $('filterAnnotator').value.trim();
   const filterDate = $('filterDate').value;
   const filterStatus = $('filterStatus').value;
   const filterGroup = $('filterGroup').value;
+  if (filterAnnotator) params.push(`annotator=${encodeURIComponent(filterAnnotator)}`);
   if (filterDate) params.push(`date=${filterDate}`);
   if (filterStatus) params.push(`status=${encodeURIComponent(filterStatus)}`);
   if (filterGroup) params.push(`group=${filterGroup}`);
@@ -316,10 +318,17 @@ $('addBatchBtn').addEventListener('click', addBatch);
 $('autoCollectBtn').addEventListener('click', autoCollect);
 $('filterBtn').addEventListener('click', loadBatches);
 $('clearFilterBtn').addEventListener('click', () => {
+  $('filterAnnotator').value = '';
   $('filterDate').value = '';
   $('filterStatus').value = '';
   $('filterGroup').value = '';
   loadBatches();
+});
+// 标注员搜索：输入时延迟触发
+let annotatorTimer;
+$('filterAnnotator').addEventListener('input', () => {
+  clearTimeout(annotatorTimer);
+  annotatorTimer = setTimeout(loadBatches, 350);
 });
 $('logoutBtn').addEventListener('click', redirectToLogin);
 $('closeEdit').addEventListener('click', () => $('editModal').classList.remove('show'));

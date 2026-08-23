@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>标注员工作统计监控（新快照系统）</title>
+  <title>标注员工作统计监控</title>
   <link rel="stylesheet" href="style.css?v=20260823" />
   <style>
     .group-section { margin-bottom: 24px; }
@@ -55,7 +55,7 @@
   <header class="topbar">
     <div class="brand">
       <h1>标注员工作统计监控</h1>
-      <span class="sub">新快照系统（2026-08-23 起）· 每天 23:59 采集单日数据</span>
+      <span class="sub">数据自 2026-08-23 起每日 23:59 自动采集</span>
     </div>
     <div class="status" id="statusBar">
       <span class="dot" id="statusDot"></span>
@@ -74,8 +74,8 @@
     </div>
 
     <div class="note-banner">
-      新系统说明：从 <strong>2026-08-23</strong> 起，每天 <strong>23:59</strong> 自动采集平台单日数据（可靠，不受平台区间算法影响）。
-      原始时长 = 新任务之和；旧任务、片段、PASS 占比等列照常显示。可手动录入（自己截图记录）当天数据。
+      数据说明：自 <strong>2026-08-23</strong> 起，系统于每日 <strong>23:59</strong> 自动采集平台单日数据。
+      原始时长 = 新任务时长之和，同时展示旧任务、片段时长、PASS 占比等指标。支持手动录入当日数据。
     </div>
 
     <!-- 控制面板 -->
@@ -147,7 +147,7 @@
   <div class="modal" id="manualModal">
     <div class="modal-content" style="max-width: 560px;">
       <div class="modal-head">
-        <h2>手动录入快照（自己截图记录）</h2>
+        <h2>手动录入当日数据</h2>
         <button class="close" id="closeManual">&times;</button>
       </div>
       <div class="manual-form">

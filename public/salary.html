@@ -41,7 +41,7 @@
   <header class="topbar">
     <div class="brand">
       <h1>薪资计算</h1>
-      <span class="sub">方式一：原始时长阶梯计价 · 方式二：结算参考 32/h</span>
+      <span class="sub">按原始时长阶梯计价</span>
     </div>
     <div class="status" id="statusBar">
       <span class="dot" id="statusDot"></span>
@@ -77,17 +77,15 @@
 
     <!-- 计算规则说明 -->
     <div class="legend-box">
-      <strong>方式一（按原始时长）：</strong>阶梯累计 — 0~130h 按 16元/h · 130~182h 按 19元/h · 超出182h 按 21.8元/h<br/>
-      <strong>方式二（按结算参考）：</strong>结算参考时长 × 32元/h（推荐）<br/>
-      <strong>结算参考</strong> = PASS片段时长 + 无片段等效时长（无片段系数 0.2）<br/>
-      <strong>★</strong> 标记为优先关注标注员 · <strong>绿色加粗</strong>为推荐方式（薪资更高）
+      <strong>计价规则（按原始时长阶梯累计）：</strong>0~130h 按 16元/h · 130~182h 按 19元/h · 超出182h 按 21.8元/h<br/>
+      <strong>原始时长</strong> = 新任务时长之和<br/>
+      <strong>★</strong> 标记为优先关注标注员
     </div>
 
     <!-- 汇总卡片 -->
     <div class="salary-summary" id="summaryCards">
       <div class="summary-card"><div class="label">总人数</div><div class="value" id="totalCount">-</div></div>
-      <div class="summary-card"><div class="label">方式一总薪资</div><div class="value blue" id="totalSalaryRaw">-</div></div>
-      <div class="summary-card"><div class="label">方式二总薪资</div><div class="value green" id="totalSalarySettlement">-</div></div>
+      <div class="summary-card"><div class="label">总薪资</div><div class="value blue" id="totalSalaryRaw">-</div></div>
     </div>
 
     <!-- 薪资表格 -->

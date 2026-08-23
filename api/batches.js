@@ -10,7 +10,7 @@ function fmtDate(d) {
   return `${y}-${m}-${day}`;
 }
 
-// GET /api/batches?date=YYYY-MM-DD&group=HC|C&status=需修改
+// GET /api/batches?date=YYYY-MM-DD&group=HC|C&status=需修改&annotator=HC3
 // POST /api/batches  body: { batch_id, annotator_label, project_type, status, review_result, reviewer, round, progress_current, progress_total, date, note }
 // PUT /api/batches?id=xxx  body: { ...fields }
 // DELETE /api/batches?id=xxx
@@ -21,7 +21,7 @@ module.exports = requireAuth(async (req, res) => {
   // ===== GET: 获取批次列表 =====
   if (req.method === 'GET') {
     try {
-      const { date, group, status } = req.query;
+      const { date, group, status, annotator } = req.query;
       let sql = 'SELECT * FROM batches WHERE 1=1';
       const args = [];
 
@@ -32,6 +32,10 @@ module.exports = requireAuth(async (req, res) => {
       if (status) {
         sql += ' AND status = ?';
         args.push(status);
+      }
+      if (annotator) {
+        sql += ' AND annotator_label LIKE ?';
+        args.push(`%${annotator}%`);
       }
       if (group) {
         if (group === 'HC') {

@@ -97,7 +97,7 @@ async function loadSummary() {
     $('rangeLabel').textContent = `（${json.range.start} 至 ${json.range.end}）`;
     $('totalCount').textContent = `共 ${json.count} 人`;
     if (!json.data.length) {
-      container.innerHTML = '<p class="empty">该区间暂无数据（数据从 2026-08-23 起每天 23:59 采集）</p>';
+      container.innerHTML = '<p class="empty">该区间暂无数据（数据自 2026-08-23 起每日 23:59 采集）</p>';
       return;
     }
 
