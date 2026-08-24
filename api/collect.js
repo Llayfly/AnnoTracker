@@ -35,9 +35,9 @@ module.exports = requireAuth(async (req, res) => {
       result = await collectSnapshotLatest();
       message = result.mode === 'today'
         ? `已采集当天（${result.date}）${result.count} 人`
-        : result.mode === 'yesterday'
-          ? `当天数据尚未生成，已采集前一天（${result.date}）${result.count} 人`
-          : '当天及前一天数据均未生成，暂无新数据';
+        : result.mode === 'backfill'
+          ? `已采集 ${result.count} 人（含补采缺失日期，最新 ${result.date}）`
+          : '当天及之前数据均未生成，暂无新数据';
     }
 
     res.json({ message, result, migration });
