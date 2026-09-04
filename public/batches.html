@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>批次管理 - 标注员工作统计监控系统</title>
+  <title>批次管理 - 标注工作台</title>
   <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
@@ -30,52 +30,52 @@
 
     <!-- 控制栏 -->
     <div class="controls">
-      <div class="time-range">
-        <button class="range-btn active" data-range="1d" onclick="selectBatchRange('1d')">最近1天</button>
-        <button class="range-btn" data-range="3d" onclick="selectBatchRange('3d')">最近3天</button>
-        <button class="range-btn" data-range="1w" onclick="selectBatchRange('1w')">最近1周</button>
-        <button class="range-btn" data-range="15d" onclick="selectBatchRange('15d')">最近半个月</button>
-        <button class="range-btn" data-range="1m" onclick="selectBatchRange('1m')">最近1月</button>
-      </div>
-      <div class="custom-range">
-        <input type="date" id="custom-start" onchange="customBatchSearch()">
-        <span>至</span>
-        <input type="date" id="custom-end" onchange="customBatchSearch()">
-        <button class="btn btn-sm" onclick="customBatchSearch()">查询</button>
-      </div>
+      <select class="filter-select" id="status-filter" onchange="loadBatches()">
+        <option value="">全部状态</option>
+        <option value="pending">待审核</option>
+        <option value="reviewing">审核中</option>
+        <option value="passed">已通过</option>
+        <option value="rejected">已驳回</option>
+      </select>
+      <select class="filter-select" id="project-filter" onchange="loadBatches()">
+        <option value="">全部项目</option>
+      </select>
       <div class="search-box">
-        <input type="text" id="search-input" placeholder="搜索标注员..." oninput="handleBatchSearch()">
+        <input type="text" id="search-input" placeholder="搜索批次ID / 标注员..." oninput="handleBatchSearch()">
       </div>
+      <button class="btn btn-sm" style="background: var(--primary); border: none;" onclick="loadBatches()">查询</button>
     </div>
 
     <!-- 批次表格 -->
     <div class="chart-container">
       <div class="chart-header">
         <h2 id="batch-title">批次管理</h2>
-        <button class="btn btn-sm export-btn" onclick="exportBatchCSV()">导出CSV</button>
+        <div style="display: flex; gap: 8px; align-items: center;">
+          <span id="batch-count" style="font-size: 13px; color: var(--text-muted);"></span>
+          <button class="btn btn-sm export-btn" onclick="exportBatchCSV()">导出CSV</button>
+        </div>
       </div>
       <div id="batch-area" class="batch-area">
-        <div class="chart-loading">加载中...</div>
+        <div class="chart-loading">
+          <div class="spinner"></div>
+          <div>加载中...</div>
+        </div>
       </div>
     </div>
 
     <footer class="footer">
-      <p>标注员工作统计监控系统 v2.0 | 批次管理 | 数据从平台直接获取</p>
+      <p>标注工作台 v2.0 | 批次管理 | 数据从平台直接获取</p>
     </footer>
   </div>
 
   <script>
-    let currentBatchRange = '1d';
-    let currentBatchSearch = '';
     let allBatchData = [];
+    let currentBatchSearch = '';
+    let searchDebounceTimer = null;
 
-    function getAuthToken() {
-      return localStorage.getItem('auth_token') || '';
-    }
-
-    function getAuthUsername() {
-      return localStorage.getItem('auth_username') || '';
-    }
+    // ========== 认证 ==========
+    function getAuthToken() { return localStorage.getItem('auth_token') || ''; }
+    function getAuthUsername() { return localStorage.getItem('auth_username') || ''; }
 
     async function checkAuth() {
       const token = getAuthToken();
@@ -116,6 +116,8 @@
         headers: token ? { 'Authorization': 'Bearer ' + token } : {}
       });
       if (response.status === 401) {
+        localStorage.removeItem('auth_token');
+        localStorage.removeItem('auth_username');
         window.location.href = '/login.html';
         throw new Error('登录已过期');
       }
@@ -123,59 +125,140 @@
       return response.json();
     }
 
-    function getRangeDates(range) {
-      const end = new Date();
-      const start = new Date();
-      const fmt = d => d.toISOString().split('T')[0];
-      switch(range) {
-        case '1d': break;
-        case '3d': start.setDate(start.getDate() - 2); break;
-        case '1w': start.setDate(start.getDate() - 6); break;
-        case '15d': start.setDate(start.getDate() - 14); break;
-        case '1m': start.setMonth(start.getMonth() - 1); break;
-        default: break;
-      }
-      return { start: fmt(start), end: fmt(end) };
-    }
-
-    async function loadBatches(startDate, endDate) {
+    // ========== 数据加载 ==========
+    async function loadBatches() {
       const batchArea = document.getElementById('batch-area');
-      batchArea.innerHTML = '<div class="chart-loading">加载中...</div>';
+      batchArea.innerHTML = '<div class="chart-loading"><div class="spinner"></div><div>加载中...</div></div>';
 
       try {
-        let start, end;
-        if (startDate && endDate) {
-          start = startDate;
-          end = endDate;
-        } else {
-          const dr = getRangeDates(currentBatchRange);
-          start = dr.start;
-          end = dr.end;
-        }
-
-        let url = `/api/stats?range=&startDate=${start}&endDate=${end}`;
-        if (currentBatchSearch) {
-          url += `&annotator=${encodeURIComponent(currentBatchSearch)}`;
-        }
+        let url = '/api/batches?limit=200';
+        const statusFilter = document.getElementById('status-filter').value;
+        if (statusFilter) url += `&status=${statusFilter}`;
+        if (currentBatchSearch) url += `&annotator=${encodeURIComponent(currentBatchSearch)}`;
 
         const data = await fetchAPI(url);
-        allBatchData = data.annotators || [];
-        document.getElementById('batch-title').textContent =
-          `批次管理（${start} 至 ${end}）`;
+
+        // 解析返回数据，兼容多种格式
+        let batches = [];
+        if (Array.isArray(data)) {
+          batches = data;
+        } else if (data.batches) {
+          batches = data.batches;
+        } else if (data.items) {
+          batches = data.items;
+        } else if (data.data) {
+          batches = Array.isArray(data.data) ? data.data : (data.data.batches || data.data.items || []);
+        } else if (data.results) {
+          batches = data.results;
+        }
+
+        allBatchData = batches;
+
+        // 更新标题和计数
+        document.getElementById('batch-title').textContent = '批次管理';
+        document.getElementById('batch-count').textContent = `共 ${batches.length} 条记录`;
+
+        // 更新项目筛选器
+        updateProjectFilter(batches);
 
         renderBatches();
-        document.getElementById('last-update').textContent =
-          `最后更新: ${new Date().toLocaleTimeString('zh-CN')}`;
+        document.getElementById('last-update').textContent = `最后更新: ${new Date().toLocaleTimeString('zh-CN')}`;
       } catch (error) {
-        batchArea.innerHTML = `<div class="chart-loading">加载失败: ${error.message}</div>`;
+        batchArea.innerHTML = `<div class="batch-empty"><div class="batch-empty-icon">!</div><div>加载失败: ${error.message}</div></div>`;
+      }
+    }
+
+    function updateProjectFilter(batches) {
+      const select = document.getElementById('project-filter');
+      const currentValue = select.value;
+      const projects = new Set();
+      for (const b of batches) {
+        const proj = getField(b, ['label_project', 'label_project_name', 'project_name', 'projectName', 'project']);
+        if (proj) projects.add(proj);
+      }
+      select.innerHTML = '<option value="">全部项目</option>';
+      for (const proj of [...projects].sort()) {
+        select.innerHTML += `<option value="${proj}">${proj}</option>`;
+      }
+      select.value = currentValue;
+    }
+
+    // ========== 渲染 ==========
+    function getField(obj, possibleKeys) {
+      for (const key of possibleKeys) {
+        if (obj[key] !== undefined && obj[key] !== null && obj[key] !== '') {
+          return obj[key];
+        }
+      }
+      return '-';
+    }
+
+    function getStatusInfo(status) {
+      const s = (status || '').toString().toLowerCase();
+      if (s.includes('pending') || s.includes('待') || s.includes('wait') || s.includes('submit')) {
+        return { class: 'batch-status-pending', label: '待审核' };
+      }
+      if (s.includes('review') || s.includes('审核中') || s.includes('progress') || s.includes('ongoing')) {
+        return { class: 'batch-status-reviewing', label: '审核中' };
+      }
+      if (s.includes('pass') || s.includes('通过') || s.includes('approve') || s.includes('accept') || s.includes('done') || s.includes('complete')) {
+        return { class: 'batch-status-passed', label: '已通过' };
+      }
+      if (s.includes('reject') || s.includes('驳回') || s.includes('fail') || s.includes('deny') || s.includes('return')) {
+        return { class: 'batch-status-rejected', label: '已驳回' };
+      }
+      return { class: 'batch-status-default', label: status || '-' };
+    }
+
+    function getResultBadge(result) {
+      const r = (result || '').toString().toLowerCase();
+      if (r.includes('pass') || r.includes('通过') || r.includes('approve')) {
+        return '<span style="color: #15803d; font-weight: 600;">通过</span>';
+      }
+      if (r.includes('reject') || r.includes('驳回') || r.includes('fail')) {
+        return '<span style="color: #b91c1c; font-weight: 600;">驳回</span>';
+      }
+      if (r.includes('pending') || r.includes('待')) {
+        return '<span style="color: #b45309; font-weight: 600;">待处理</span>';
+      }
+      return result || '-';
+    }
+
+    function formatDate(dateStr) {
+      if (!dateStr || dateStr === '-') return '-';
+      try {
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return dateStr;
+        return d.toLocaleString('zh-CN', {
+          year: 'numeric', month: '2-digit', day: '2-digit',
+          hour: '2-digit', minute: '2-digit'
+        });
+      } catch {
+        return dateStr;
       }
     }
 
     function renderBatches() {
       const batchArea = document.getElementById('batch-area');
+      const projectFilter = document.getElementById('project-filter').value;
 
-      if (allBatchData.length === 0) {
-        batchArea.innerHTML = '<div class="chart-loading">暂无数据</div>';
+      let filtered = allBatchData;
+
+      // 项目筛选
+      if (projectFilter) {
+        filtered = filtered.filter(b => {
+          const proj = getField(b, ['label_project', 'label_project_name', 'project_name', 'projectName', 'project']);
+          return proj === projectFilter;
+        });
+      }
+
+      if (filtered.length === 0) {
+        batchArea.innerHTML = `
+          <div class="batch-empty">
+            <div class="batch-empty-icon">-</div>
+            <div>暂无批次数据</div>
+          </div>
+        `;
         return;
       }
 
@@ -183,82 +266,90 @@
       html += `
         <thead>
           <tr>
+            <th>批次ID</th>
+            <th>标注项目</th>
+            <th>供应商</th>
+            <th>任务组合</th>
+            <th>状态</th>
+            <th>审核结果</th>
+            <th>实际审核人</th>
             <th>标注员</th>
-            <th>组织</th>
-            <th>新增任务(h)</th>
-            <th>旧任务(h)</th>
-            <th>原始时长(h)</th>
-            <th>片段时长(h)</th>
-            <th>无片段时长(h)</th>
-            <th>无片段等效(h)</th>
-            <th>结算参考(h)</th>
-            <th>累计参考(h)</th>
-            <th>日均时长(h)</th>
-            <th>活跃天数</th>
+            <th>轮次</th>
+            <th>结果</th>
+            <th>创建时间</th>
           </tr>
         </thead>
         <tbody>
       `;
 
-      for (const a of allBatchData) {
+      for (const b of filtered) {
+        const batchId = getField(b, ['batch_id', 'batchId', 'id', 'batch_no', 'batchNo']);
+        const labelProject = getField(b, ['label_project', 'label_project_name', 'project_name', 'projectName', 'project']);
+        const supplier = getField(b, ['organization', 'org', 'supplier', 'vendor', 'organization_name', 'org_name']);
+        const taskGroup = getField(b, ['task_group', 'taskGroup', 'task_group_name', 'taskGroupName', 'task_set', 'taskSet']);
+        const status = getField(b, ['status', 'batch_status', 'batchStatus', 'state']);
+        const reviewResult = getField(b, ['review_result', 'reviewResult', 'audit_result', 'auditResult']);
+        const reviewer = getField(b, ['reviewer', 'actual_reviewer', 'actualReviewer', 'reviewer_name', 'auditor', 'reviewer_name', 'auditor_name']);
+        const annotator = getField(b, ['annotator', 'annotator_label', 'annotator_name', 'annotatorName', 'labeler']);
+        const round = getField(b, ['round', 'batch_round', 'batchRound', 'round_number', 'roundNumber']);
+        const result = getField(b, ['result', 'review_result_detail', 'reviewResultDetail', 'final_result', 'finalResult']);
+        const createdAt = getField(b, ['created_at', 'createdAt', 'created_time', 'createdTime', 'create_time', 'createTime']);
+
+        const statusInfo = getStatusInfo(status);
+
         html += `
           <tr>
-            <td>${a.annotator_label || '-'}</td>
-            <td>${a.organization || '-'}</td>
-            <td class="cell-blue">${a.total_new_task_hours || '0'}</td>
-            <td class="cell-yellow">${a.total_old_task_hours || '0'}</td>
-            <td><strong>${a.total_raw_hours || '0'}</strong></td>
-            <td>${a.total_segment_hours || '0'}</td>
-            <td>${a.total_no_clip_hours || '0'}</td>
-            <td>${a.total_no_clip_equivalent_hours || '0'}</td>
-            <td>${a.total_settlement_hours || '0'}</td>
-            <td>${a.latest_cumulative_reference_hours || '0'}</td>
-            <td>${a.avg_daily_hours || '0'}</td>
-            <td>${a.active_days || 0}</td>
+            <td class="batch-id-cell">${batchId}</td>
+            <td>${labelProject}</td>
+            <td>${supplier}</td>
+            <td>${taskGroup}</td>
+            <td><span class="batch-status ${statusInfo.class}">${statusInfo.label}</span></td>
+            <td>${getResultBadge(reviewResult)}</td>
+            <td>${reviewer}</td>
+            <td>${annotator}</td>
+            <td>${round}</td>
+            <td>${getResultBadge(result)}</td>
+            <td style="white-space: nowrap; color: var(--text-muted); font-size: 12px;">${formatDate(createdAt)}</td>
           </tr>
         `;
       }
 
       html += '</tbody></table></div>';
       batchArea.innerHTML = html;
+      document.getElementById('batch-count').textContent = `共 ${filtered.length} 条记录`;
     }
 
-    function selectBatchRange(range) {
-      currentBatchRange = range;
-      document.querySelectorAll('.range-btn').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.range === range);
-      });
-      document.getElementById('custom-start').value = '';
-      document.getElementById('custom-end').value = '';
-      loadBatches();
-    }
-
+    // ========== 交互 ==========
     function handleBatchSearch() {
-      currentBatchSearch = document.getElementById('search-input').value.trim();
-      loadBatches();
-    }
-
-    function customBatchSearch() {
-      const start = document.getElementById('custom-start').value;
-      const end = document.getElementById('custom-end').value;
-      if (start && end) {
-        currentBatchRange = '';
-        document.querySelectorAll('.range-btn').forEach(btn => btn.classList.remove('active'));
-        loadBatches(start, end);
-      }
+      clearTimeout(searchDebounceTimer);
+      searchDebounceTimer = setTimeout(() => {
+        currentBatchSearch = document.getElementById('search-input').value.trim();
+        loadBatches();
+      }, 300);
     }
 
     function exportBatchCSV() {
       if (allBatchData.length === 0) { alert('暂无数据可导出'); return; }
-      const headers = ['标注员','组织','新增任务(h)','旧任务(h)','原始时长(h)','片段时长(h)','无片段时长(h)','无片段等效(h)','结算参考(h)','累计参考(h)','日均时长(h)','活跃天数'];
-      const rows = allBatchData.map(a => [
-        a.annotator_label || '', a.organization || '',
-        a.total_new_task_hours || '0', a.total_old_task_hours || '0',
-        a.total_raw_hours || '0', a.total_segment_hours || '0',
-        a.total_no_clip_hours || '0', a.total_no_clip_equivalent_hours || '0',
-        a.total_settlement_hours || '0', a.latest_cumulative_reference_hours || '0',
-        a.avg_daily_hours || '0', a.active_days || 0
-      ].join(','));
+
+      const headers = ['批次ID', '标注项目', '供应商', '任务组合', '状态', '审核结果', '实际审核人', '标注员', '轮次', '结果', '创建时间'];
+
+      const rows = allBatchData.map(b => {
+        const batchId = getField(b, ['batch_id', 'batchId', 'id', 'batch_no', 'batchNo']);
+        const labelProject = getField(b, ['label_project', 'label_project_name', 'project_name', 'projectName', 'project']);
+        const supplier = getField(b, ['organization', 'org', 'supplier', 'vendor', 'organization_name', 'org_name']);
+        const taskGroup = getField(b, ['task_group', 'taskGroup', 'task_group_name', 'taskGroupName', 'task_set', 'taskSet']);
+        const status = getField(b, ['status', 'batch_status', 'batchStatus', 'state']);
+        const reviewResult = getField(b, ['review_result', 'reviewResult', 'audit_result', 'auditResult']);
+        const reviewer = getField(b, ['reviewer', 'actual_reviewer', 'actualReviewer', 'reviewer_name', 'auditor']);
+        const annotator = getField(b, ['annotator', 'annotator_label', 'annotator_name', 'annotatorName', 'labeler']);
+        const round = getField(b, ['round', 'batch_round', 'batchRound', 'round_number', 'roundNumber']);
+        const result = getField(b, ['result', 'review_result_detail', 'reviewResultDetail', 'final_result', 'finalResult']);
+        const createdAt = getField(b, ['created_at', 'createdAt', 'created_time', 'createdTime', 'create_time', 'createTime']);
+
+        return [batchId, labelProject, supplier, taskGroup, status, reviewResult, reviewer, annotator, round, result, formatDate(createdAt)]
+          .map(v => `"${(v || '').toString().replace(/"/g, '""')}"`).join(',');
+      });
+
       const csv = '\uFEFF' + headers.join(',') + '\n' + rows.join('\n');
       const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
       const url = URL.createObjectURL(blob);
@@ -269,6 +360,7 @@
       URL.revokeObjectURL(url);
     }
 
+    // ========== 初始化 ==========
     window.addEventListener('DOMContentLoaded', async () => {
       const authed = await checkAuth();
       if (!authed) return;

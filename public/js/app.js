@@ -212,10 +212,13 @@ function renderChart() {
         <div class="h-bar-row ${alertClass}" onclick="showDetail('${a.annotator_label}')">
           <div class="h-bar-label">${a.annotator_label}</div>
           <div class="h-bar-track">
-            <div class="h-bar-fill-new" style="width: ${newPct}%">${newTaskHours >= 0.1 ? `<span class="h-bar-segment-label">${newTaskHours.toFixed(1)}h</span>` : ''}</div>
-            <div class="h-bar-fill-old" style="width: ${oldPct}%">${oldTaskHours >= 0.1 ? `<span class="h-bar-segment-label">${oldTaskHours.toFixed(1)}h</span>` : ''}</div>
+            ${newTaskHours > 0 ? `<div class="h-bar-fill-new" style="width: ${newPct}%"><span class="h-bar-segment-label">新增 ${newTaskHours.toFixed(1)}h</span></div>` : ''}
+            ${oldTaskHours > 0 ? `<div class="h-bar-fill-old" style="width: ${oldPct}%"><span class="h-bar-segment-label">旧 ${oldTaskHours.toFixed(1)}h</span></div>` : ''}
           </div>
-          <div class="h-bar-value">${totalHours.toFixed(1)}h</div>
+          <div class="h-bar-values">
+            <span class="h-bar-value-new">新增 ${newTaskHours.toFixed(1)}h</span>
+            <span class="h-bar-value-old">旧 ${oldTaskHours.toFixed(1)}h</span>
+          </div>
           <div class="h-bar-tooltip">
             <div class="h-bar-tooltip-row"><span class="t-label">标注员</span><span class="t-value">${a.annotator_label}</span></div>
             <div class="h-bar-tooltip-row"><span class="t-label">新增任务</span><span class="t-value">${newTaskHours.toFixed(2)}h</span></div>
