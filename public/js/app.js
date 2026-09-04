@@ -74,6 +74,7 @@ async function fetchAPI(url) {
 async function loadStats() {
   const chartArea = document.getElementById('chart-area');
   chartArea.innerHTML = '<div class="chart-loading">加载中...</div>';
+  const startTime = Date.now();
 
   try {
     let url = `/api/stats?range=${currentRange}`;
@@ -91,10 +92,53 @@ async function loadStats() {
         `标注员工作统计（${s.date_range.start} 至 ${s.date_range.end}）`;
     }
 
+    // 记录批次信息到 localStorage
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+    const orgSet = new Set(allData.map(a => getOrgPrefix(a.annotator_label)));
+    const totalNew = allData.reduce((sum, a) => sum + (parseFloat(a.total_new_task_hours) || 0), 0);
+    const totalOld = allData.reduce((sum, a) => sum + (parseFloat(a.total_old_task_hours) || 0), 0);
+    const totalRaw = allData.reduce((sum, a) => sum + (parseFloat(a.total_raw_hours) || 0), 0);
+
+    const batch = {
+      time: new Date().toISOString(),
+      date_range: s.date_range ? `${s.date_range.start} ~ ${s.date_range.end}` : '-',
+      annotator_count: allData.length,
+      org_count: orgSet.size,
+      total_new_hours: totalNew.toFixed(2),
+      total_old_hours: totalOld.toFixed(2),
+      total_raw_hours: totalRaw.toFixed(2),
+      elapsed: elapsed,
+      status: 'success',
+    };
+
+    const batches = JSON.parse(localStorage.getItem('batch_logs') || '[]');
+    batches.unshift(batch);
+    if (batches.length > 50) batches.length = 50;
+    localStorage.setItem('batch_logs', JSON.stringify(batches));
+
     renderChart();
     updateLastRefresh();
   } catch (error) {
     console.error('加载数据失败:', error);
+
+    // 记录失败批次
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+    const batch = {
+      time: new Date().toISOString(),
+      date_range: currentRange || '-',
+      annotator_count: 0,
+      org_count: 0,
+      total_new_hours: '0',
+      total_old_hours: '0',
+      total_raw_hours: '0',
+      elapsed: elapsed,
+      status: '失败: ' + error.message,
+    };
+    const batches = JSON.parse(localStorage.getItem('batch_logs') || '[]');
+    batches.unshift(batch);
+    if (batches.length > 50) batches.length = 50;
+    localStorage.setItem('batch_logs', JSON.stringify(batches));
+
     chartArea.innerHTML = `<div class="chart-loading">加载失败: ${error.message}<br>请确认服务器已启动并已连接数据平台</div>`;
   }
 }
@@ -114,25 +158,31 @@ async function loadHealth() {
 }
 
 async function loadLogs() {
-  try {
-    const logs = await fetchAPI('/api/logs?limit=20');
-    const tbody = document.getElementById('logs-tbody');
-    if (logs.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#999;padding:20px;">暂无日志</td></tr>';
-      return;
-    }
-    tbody.innerHTML = logs.map(log => `
-      <tr>
-        <td>${new Date(log.created_at).toLocaleString('zh-CN')}</td>
-        <td>${log.date}</td>
-        <td class="${log.status === 'success' ? 'status-success' : 'status-error'}">${log.status === 'success' ? '成功' : '失败'}</td>
-        <td>${log.annotator_count || 0}</td>
-        <td>${log.error_message || '-'}</td>
-      </tr>
-    `).join('');
-  } catch (e) {
-    console.error('加载日志失败:', e);
+  const tbody = document.getElementById('logs-tbody');
+  const batches = JSON.parse(localStorage.getItem('batch_logs') || '[]');
+
+  if (batches.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:#999;padding:20px;">暂无批次记录</td></tr>';
+    return;
   }
+
+  tbody.innerHTML = batches.map(log => {
+    const isSuccess = log.status === 'success';
+    const time = new Date(log.time).toLocaleString('zh-CN');
+    return `
+      <tr>
+        <td>${time}</td>
+        <td>${log.date_range || '-'}</td>
+        <td>${log.annotator_count || 0}</td>
+        <td>${log.org_count || 0}</td>
+        <td>${log.total_new_hours || '0'}</td>
+        <td>${log.total_old_hours || '0'}</td>
+        <td>${log.total_raw_hours || '0'}</td>
+        <td>${log.elapsed || '-'}</td>
+        <td class="${isSuccess ? 'status-success' : 'status-error'}">${isSuccess ? '成功' : log.status}</td>
+      </tr>
+    `;
+  }).join('');
 }
 
 // ========== 柱状图渲染 ==========
@@ -487,11 +537,11 @@ function toggleLogs() {
   const h3 = content.previousElementSibling;
   if (content.style.display === 'none') {
     content.style.display = 'block';
-    h3.textContent = h3.textContent.replace('▶', '▼');
+    h3.innerHTML = '批次管理 ▼';
     loadLogs();
   } else {
     content.style.display = 'none';
-    h3.textContent = h3.textContent.replace('▼', '▶');
+    h3.innerHTML = '批次管理 ▶';
   }
 }
 
