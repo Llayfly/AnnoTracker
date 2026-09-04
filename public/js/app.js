@@ -25,14 +25,8 @@ async function loadStats() {
     const data = await fetchAPI(url);
     allData = data.annotators || [];
 
-    // 渲染统计卡片
-    const s = data.summary || {};
-    document.getElementById('card-total').textContent = s.total_annotators || 0;
-    document.getElementById('card-red').textContent = s.red_count || 0;
-    document.getElementById('card-blue').textContent = s.blue_count || 0;
-    document.getElementById('card-green').textContent = s.green_count || 0;
-
     // 更新图表标题
+    const s = data.summary || {};
     if (s.date_range) {
       document.getElementById('chart-title').textContent =
         `标注员工作统计（${s.date_range.start} 至 ${s.date_range.end}）`;
@@ -84,6 +78,13 @@ async function loadLogs() {
 
 // ========== 柱状图渲染 ==========
 
+// 从标注员标签中提取组织前缀
+function getOrgPrefix(label) {
+  if (!label) return '其他';
+  const match = label.match(/^([A-Za-z]+)/);
+  return match ? match[1] : '其他';
+}
+
 function renderChart() {
   const chartArea = document.getElementById('chart-area');
 
@@ -92,62 +93,75 @@ function renderChart() {
     return;
   }
 
-  // 计算最大值用于Y轴刻度
+  // 按组织分组
+  const orgGroups = {};
+  for (const a of allData) {
+    const org = getOrgPrefix(a.annotator_label);
+    if (!orgGroups[org]) orgGroups[org] = [];
+    orgGroups[org].push(a);
+  }
+
+  // 计算全局最大值用于统一柱长比例
   const maxHours = Math.max(...allData.map(a => parseFloat(a.total_raw_hours) || 0));
   const niceMax = niceCeil(maxHours);
 
-  // 生成Y轴刻度（5格）
-  const gridSteps = 5;
-  const stepValue = niceMax / gridSteps;
-  let gridHTML = '<div class="bar-chart-grid">';
-  for (let i = gridSteps; i >= 0; i--) {
-    const val = (stepValue * i).toFixed(1);
-    gridHTML += `<div class="grid-line"><span>${val}h</span></div>`;
-  }
-  gridHTML += '</div>';
+  // 按组织名排序后渲染
+  const sortedOrgs = Object.keys(orgGroups).sort();
+  let html = '';
 
-  // 生成柱子
-  let barsHTML = '';
-  for (const a of allData) {
-    const totalHours = parseFloat(a.total_raw_hours) || 0;
-    const newTaskHours = parseFloat(a.total_new_task_hours) || 0;
-    const oldTaskHours = parseFloat(a.total_old_task_hours) || 0;
+  for (const org of sortedOrgs) {
+    const members = orgGroups[org];
+    // 组内按总时长降序
+    members.sort((a, b) => parseFloat(b.total_raw_hours) - parseFloat(a.total_raw_hours));
 
-    // 柱子高度百分比（基于niceMax）
-    const totalHeightPct = niceMax > 0 ? (totalHours / niceMax) * 100 : 0;
-    const newTaskPct = totalHours > 0 ? (newTaskHours / totalHours) * 100 : 0;
-    const oldTaskPct = totalHours > 0 ? (oldTaskHours / totalHours) * 100 : 0;
+    let barsHTML = '';
+    for (const a of members) {
+      const totalHours = parseFloat(a.total_raw_hours) || 0;
+      const newTaskHours = parseFloat(a.total_new_task_hours) || 0;
+      const oldTaskHours = parseFloat(a.total_old_task_hours) || 0;
 
-    const alertClass = `alert-${a.alert_level}`;
-    const alertText = a.alert_level === 'red' ? '预警' : a.alert_level === 'blue' ? '正常' : '活跃';
+      const totalPct = niceMax > 0 ? (totalHours / niceMax) * 100 : 0;
+      const newPct = totalHours > 0 ? (newTaskHours / totalHours) * totalPct : 0;
+      const oldPct = totalHours > 0 ? (oldTaskHours / totalHours) * totalPct : 0;
 
-    barsHTML += `
-      <div class="bar-col ${alertClass}" onclick="showDetail('${a.annotator_label}')">
-        <div class="bar-tooltip">
-          <div class="bar-tooltip-row"><span class="t-label">标注员</span><span class="t-value">${a.annotator_label}</span></div>
-          <div class="bar-tooltip-row"><span class="t-label">新增任务</span><span class="t-value">${newTaskHours.toFixed(2)}h</span></div>
-          <div class="bar-tooltip-row"><span class="t-label">旧任务</span><span class="t-value">${oldTaskHours.toFixed(2)}h</span></div>
-          <div class="bar-tooltip-row"><span class="t-label">原始总时长</span><span class="t-value">${totalHours.toFixed(2)}h</span></div>
-          <div class="bar-tooltip-row"><span class="t-label">日均时长</span><span class="t-value">${a.avg_daily_hours || '0.00'}h</span></div>
-          <div class="bar-tooltip-row"><span class="t-label">活跃天数</span><span class="t-value">${a.active_days || 0}天</span></div>
-          <div class="bar-tooltip-row"><span class="t-label">状态</span><span class="t-value">${alertText}</span></div>
+      const alertClass = `alert-${a.alert_level}`;
+      const alertText = a.alert_level === 'red' ? '预警' : a.alert_level === 'blue' ? '正常' : '活跃';
+
+      barsHTML += `
+        <div class="h-bar-row ${alertClass}" onclick="showDetail('${a.annotator_label}')">
+          <div class="h-bar-label">${a.annotator_label}</div>
+          <div class="h-bar-track">
+            <div class="h-bar-fill-new" style="width: ${newPct}%"></div>
+            <div class="h-bar-fill-old" style="width: ${oldPct}%"></div>
+          </div>
+          <div class="h-bar-value">${totalHours.toFixed(1)}h</div>
+          <div class="h-bar-tooltip">
+            <div class="h-bar-tooltip-row"><span class="t-label">标注员</span><span class="t-value">${a.annotator_label}</span></div>
+            <div class="h-bar-tooltip-row"><span class="t-label">新增任务</span><span class="t-value">${newTaskHours.toFixed(2)}h</span></div>
+            <div class="h-bar-tooltip-row"><span class="t-label">旧任务</span><span class="t-value">${oldTaskHours.toFixed(2)}h</span></div>
+            <div class="h-bar-tooltip-row"><span class="t-label">原始总时长</span><span class="t-value">${totalHours.toFixed(2)}h</span></div>
+            <div class="h-bar-tooltip-row"><span class="t-label">日均时长</span><span class="t-value">${a.avg_daily_hours || '0.00'}h</span></div>
+            <div class="h-bar-tooltip-row"><span class="t-label">活跃天数</span><span class="t-value">${a.active_days || 0}天</span></div>
+            <div class="h-bar-tooltip-row"><span class="t-label">状态</span><span class="t-value">${alertText}</span></div>
+          </div>
         </div>
-        <div class="bar-stack" style="height: ${totalHeightPct}%">
-          <div class="bar-new-task" style="height: ${newTaskPct}%"></div>
-          <div class="bar-old-task" style="height: ${oldTaskPct}%"></div>
+      `;
+    }
+
+    html += `
+      <div class="org-group">
+        <div class="org-group-header">
+          ${org}
+          <span class="org-group-count">${members.length}人</span>
         </div>
-        <div class="bar-total-label">${totalHours.toFixed(1)}h</div>
-        <div class="bar-label">${a.annotator_label}</div>
+        <div class="h-bar-chart">
+          ${barsHTML}
+        </div>
       </div>
     `;
   }
 
-  chartArea.innerHTML = `
-    <div class="bar-chart" style="padding-left: 50px;">
-      ${gridHTML}
-      ${barsHTML}
-    </div>
-  `;
+  chartArea.innerHTML = html;
 }
 
 // 向上取整到漂亮的数字
@@ -327,12 +341,10 @@ function customRangeSearch() {
     fetchAPI(url).then(data => {
       allData = data.annotators || [];
       const s = data.summary || {};
-      document.getElementById('card-total').textContent = s.total_annotators || 0;
-      document.getElementById('card-red').textContent = s.red_count || 0;
-      document.getElementById('card-blue').textContent = s.blue_count || 0;
-      document.getElementById('card-green').textContent = s.green_count || 0;
-      document.getElementById('chart-title').textContent =
-        `标注员工作统计（${start} 至 ${end}）`;
+      if (s.date_range) {
+        document.getElementById('chart-title').textContent =
+          `标注员工作统计（${start} 至 ${end}）`;
+      }
       renderChart();
       updateLastRefresh();
     }).catch(error => {

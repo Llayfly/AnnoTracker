@@ -177,9 +177,10 @@ body {
 .export-btn:hover { background: #5568d3; }
 
 .chart-area {
-  padding: 24px 20px;
+  padding: 20px;
   min-height: 400px;
-  overflow-x: auto;
+  overflow-y: auto;
+  max-height: 80vh;
 }
 
 .chart-loading {
@@ -189,120 +190,108 @@ body {
   font-size: 15px;
 }
 
-/* 柱状图主体 */
-.bar-chart {
+/* ========== 组织分组 ========== */
+.org-group {
+  margin-bottom: 24px;
+}
+
+.org-group-header {
+  font-size: 15px;
+  font-weight: 700;
+  color: #555;
+  padding: 8px 12px;
+  background: #f8f9fa;
+  border-radius: 6px;
+  margin-bottom: 12px;
+  border-left: 4px solid #667eea;
   display: flex;
-  align-items: flex-end;
-  gap: 4px;
-  min-height: 350px;
-  padding-bottom: 40px;
-  position: relative;
-}
-
-/* Y轴刻度线 */
-.bar-chart-grid {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 40px;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  pointer-events: none;
-}
-
-.grid-line {
-  width: 100%;
-  border-top: 1px dashed #e8e8e8;
-  position: relative;
-}
-
-.grid-line span {
-  position: absolute;
-  left: -50px;
-  top: -8px;
-  font-size: 11px;
-  color: #999;
-  white-space: nowrap;
-}
-
-/* 每个标注员的柱子容器 */
-.bar-col {
-  flex: 1;
-  min-width: 60px;
-  display: flex;
-  flex-direction: column;
   align-items: center;
+  gap: 8px;
+}
+
+.org-group-count {
+  font-size: 12px;
+  color: #999;
+  font-weight: 400;
+}
+
+/* ========== 横向柱状图 ========== */
+.h-bar-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.h-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 32px;
   position: relative;
   cursor: pointer;
-  transition: transform 0.15s;
+  transition: background 0.15s;
+  border-radius: 4px;
+  padding: 0 4px;
 }
 
-.bar-col:hover { transform: translateY(-3px); }
-
-/* 柱子本体 */
-.bar-stack {
-  width: 70%;
-  max-width: 48px;
-  min-height: 2px;
-  display: flex;
-  flex-direction: column-reverse;
-  border-radius: 4px 4px 0 0;
-  overflow: hidden;
-  position: relative;
-  transition: filter 0.15s;
+.h-bar-row:hover {
+  background: #f8f9fa;
 }
 
-.bar-col:hover .bar-stack { filter: brightness(1.1); }
-
-/* 蓝色新增任务 */
-.bar-new-task {
-  background: linear-gradient(180deg, #63b3ed 0%, #4299e1 100%);
-  transition: height 0.5s ease;
-}
-
-/* 黄色旧任务 */
-.bar-old-task {
-  background: linear-gradient(180deg, #fbd38d 0%, #f6ad55 100%);
-  transition: height 0.5s ease;
-}
-
-/* 柱子上的总时长标签 */
-.bar-total-label {
-  position: absolute;
-  top: -22px;
-  left: 50%;
-  transform: translateX(-50%);
-  font-size: 11px;
-  font-weight: 600;
-  color: #333;
-  white-space: nowrap;
-}
-
-/* X轴标注员名称 */
-.bar-label {
-  margin-top: 8px;
-  font-size: 12px;
+.h-bar-label {
+  width: 90px;
+  text-align: right;
+  font-size: 13px;
   color: #555;
-  text-align: center;
+  font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 70px;
+  flex-shrink: 0;
 }
 
-/* 预警颜色边框 */
-.bar-col.alert-red .bar-stack { box-shadow: 0 0 0 2px #f56565; }
-.bar-col.alert-blue .bar-stack { box-shadow: 0 0 0 2px #4299e1; }
-.bar-col.alert-green .bar-stack { box-shadow: 0 0 0 2px #48bb78; }
+.h-bar-track {
+  flex: 1;
+  height: 24px;
+  background: #f0f0f0;
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+  display: flex;
+}
+
+.h-bar-fill-new {
+  height: 100%;
+  background: linear-gradient(90deg, #4299e1 0%, #63b3ed 100%);
+  transition: width 0.5s ease;
+  position: relative;
+}
+
+.h-bar-fill-old {
+  height: 100%;
+  background: linear-gradient(90deg, #f6ad55 0%, #fbd38d 100%);
+  transition: width 0.5s ease;
+}
+
+.h-bar-value {
+  width: 60px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #333;
+  text-align: left;
+  flex-shrink: 0;
+}
+
+/* 预警边框 */
+.h-bar-row.alert-red .h-bar-track { box-shadow: 0 0 0 2px #f56565; }
+.h-bar-row.alert-blue .h-bar-track { box-shadow: 0 0 0 2px #4299e1; }
+.h-bar-row.alert-green .h-bar-track { box-shadow: 0 0 0 2px #48bb78; }
 
 /* tooltip */
-.bar-tooltip {
+.h-bar-tooltip {
   position: absolute;
-  bottom: calc(100% + 8px);
-  left: 50%;
-  transform: translateX(-50%);
+  bottom: calc(100% + 4px);
+  left: 100px;
   background: rgba(0,0,0,0.85);
   color: white;
   padding: 8px 12px;
@@ -316,16 +305,16 @@ body {
   line-height: 1.8;
 }
 
-.bar-col:hover .bar-tooltip { opacity: 1; }
+.h-bar-row:hover .h-bar-tooltip { opacity: 1; }
 
-.bar-tooltip-row {
+.h-bar-tooltip-row {
   display: flex;
   justify-content: space-between;
   gap: 12px;
 }
 
-.bar-tooltip-row .t-label { color: #ccc; }
-.bar-tooltip-row .t-value { font-weight: 600; }
+.h-bar-tooltip-row .t-label { color: #ccc; }
+.h-bar-tooltip-row .t-value { font-weight: 600; }
 
 /* 详情弹窗中的柱状图 */
 .detail-chart-area {
