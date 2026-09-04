@@ -1,5 +1,5 @@
 'use strict';
-// 批次管理前端逻辑
+// 批次管理前端逻辑 v20260904：二级导航 / 状态彩标 / 筛选查询 / 统计卡 / 前端分页
 
 const TOKEN_KEY = 'am_token';
 const USER_KEY = 'am_user';
@@ -28,126 +28,133 @@ if (currentUser) { document.getElementById('userBadge').textContent = `👤 ${cu
 
 const $ = (id) => document.getElementById(id);
 
+// 状态枚举（平台英文已由后端映射为中文）
+const STATUS_ORDER = ['已分发', '待审核', '预审核通过', '通过', '需修改', '已废弃'];
 const statusClass = {
-  '已分发': 'st-distributed',
-  '待审核': 'st-pending',
-  '已通过': 'st-passed',
-  '需修改': 'st-rejected',
-  '已驳回': 'st-rejected',
-  '已废弃': 'st-abandoned',
+  '已分发': 'blue',
+  '待审核': 'orange',
+  '预审核通过': 'purple',
+  '通过': 'green',
+  '需修改': 'red warn',
+  '已废弃': 'gray',
+};
+const statusColor = {
+  '已分发': 'blue',
+  '待审核': 'orange',
+  '预审核通过': 'purple',
+  '通过': 'green',
+  '需修改': 'red',
+  '已废弃': '',
 };
 
-// 获取分组
-function getGroup(label) {
-  if (label.startsWith('HC')) return 'HC';
-  if (label.startsWith('C')) return 'C';
-  if (label.startsWith('S')) return 'S';
-  return 'other';
+// UTC ISO → 本地 YYYY/MM/DD HH:MM
+function fmtTime(iso) {
+  if (!iso) return '-';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '-';
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}/${p(d.getMonth() + 1)}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
-const groupConfig = {
-  HC: { title: 'HC 开头账号', cls: 'section-hc' },
-  C: { title: 'C 开头账号', cls: 'section-c' },
-  S: { title: 'S 开头账号', cls: 'section-s' },
-  other: { title: '其他账号', cls: 'section-other' },
-};
+let allBatches = [];
+const state = { page: 1, pageSize: 100, filtered: [] };
 
-// ===== 加载批次列表 =====
-async function loadBatches() {
-  const listDiv = $('batchList');
-  listDiv.innerHTML = '<p class="empty">加载中...</p>';
-
-  let url = '/api/batches?';
-  const params = [];
-  const filterAnnotator = $('filterAnnotator').value.trim();
-  const filterDate = $('filterDate').value;
-  const filterStatus = $('filterStatus').value;
-  const filterGroup = $('filterGroup').value;
-  if (filterAnnotator) params.push(`annotator=${encodeURIComponent(filterAnnotator)}`);
-  if (filterDate) params.push(`date=${filterDate}`);
-  if (filterStatus) params.push(`status=${encodeURIComponent(filterStatus)}`);
-  if (filterGroup) params.push(`group=${filterGroup}`);
-  url += params.join('&');
-
+// ===== 全量加载（内存筛选 + 分页）=====
+async function loadAll() {
+  $('batchBody').innerHTML = '<tr><td colspan="10" class="empty">加载中...</td></tr>';
   try {
-    const res = await authFetch(url);
+    const res = await authFetch('/api/batches');
     if (!res) return;
     const json = await res.json();
-    if (!json.data.length) {
-      listDiv.innerHTML = '<p class="empty">暂无批次记录，请在上方添加</p>';
-      $('summaryBar').innerHTML = '';
-      return;
-    }
-
-    // 汇总
-    const summary = {};
-    json.data.forEach((b) => { summary[b.status] = (summary[b.status] || 0) + 1; });
-    $('summaryBar').innerHTML = Object.entries(summary).map(([k, v]) =>
-      `<span class="summary-chip ${statusClass[k] || ''}">${k}: ${v}</span>`
-    ).join('') + `<span class="summary-chip" style="background:#f5f5f5;color:#616161;">合计: ${json.count}</span>`;
-
-    // 按日期分组（不按组织分组，按日期倒序）
-    const byDate = {};
-    json.data.forEach((b) => {
-      if (!byDate[b.date]) byDate[b.date] = [];
-      byDate[b.date].push(b);
-    });
-
-    let html = '';
-    const sortedDates = Object.keys(byDate).sort().reverse();
-    for (const date of sortedDates) {
-      html += `<h3 style="margin:12px 0 6px;font-size:14px;color:#666;">${date}（${byDate[date].length} 条）</h3>`;
-      html += renderBatchTable(byDate[date]);
-    }
-
-    listDiv.innerHTML = html || '<p class="empty">暂无批次记录</p>';
-
-    // 绑定编辑/删除按钮
-    listDiv.querySelectorAll('.btn-edit').forEach((btn) => {
-      btn.addEventListener('click', () => openEdit(btn.dataset.id));
-    });
-    listDiv.querySelectorAll('.btn-del').forEach((btn) => {
-      btn.addEventListener('click', () => delBatch(btn.dataset.id));
-    });
+    allBatches = (json.data || []).slice();
+    buildProjectOptions();
+    applyFilter();
   } catch (e) {
-    listDiv.innerHTML = `<p class="empty">加载失败: ${e.message}</p>`;
+    $('batchBody').innerHTML = `<tr><td colspan="10" class="empty">加载失败: ${e.message}</td></tr>`;
   }
 }
 
-function renderBatchTable(items) {
-  let html = `<div class="table-wrap"><table class="batch-table">
-    <thead><tr>
-      <th style="width:70px;">批次ID</th>
-      <th style="width:70px;">标注员</th>
-      <th style="width:110px;">项目类型</th>
-      <th style="width:70px;">状态</th>
-      <th style="width:70px;">审核结果</th>
-      <th style="width:70px;">审核人</th>
-      <th style="width:45px;">轮次</th>
-      <th style="width:70px;">进度</th>
-      <th style="text-align:left;">备注</th>
-      <th style="width:90px;">操作</th>
-    </tr></thead><tbody>`;
-  for (const b of items) {
-    const sc = statusClass[b.status] || '';
-    html += `<tr>
-      <td>${b.batch_id || '-'}</td>
-      <td><strong>${b.annotator_label}</strong></td>
+function buildProjectOptions() {
+  const set = new Set(allBatches.map((b) => b.project_type).filter(Boolean));
+  const sel = $('filterProject');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">全部项目</option>' +
+    [...set].sort().map((x) => `<option>${x}</option>`).join('');
+  if (cur && set.has(cur)) sel.value = cur;
+}
+
+function applyFilter() {
+  const status = $('filterStatus').value;
+  const project = $('filterProject').value;
+  const kw = $('filterKeyword').value.trim().toLowerCase();
+  let list = allBatches.filter((b) => {
+    if (status && b.status !== status) return false;
+    if (project && b.project_type !== project) return false;
+    if (kw) {
+      const hay = [b.batch_id, b.annotator_label, b.project_type, b.task_combination].join(' ').toLowerCase();
+      if (!hay.includes(kw)) return false;
+    }
+    return true;
+  });
+  state.filtered = list;
+  state.page = 1;
+  renderStats(list.length);
+  renderTable(list);
+}
+
+// ===== 统计卡 =====
+function renderStats(total) {
+  const count = {};
+  allBatches.forEach((b) => { count[b.status] = (count[b.status] || 0) + 1; });
+  const card = (label, val, color) =>
+    `<div class="batch-stat-card"><div class="label">${label}</div><div class="value ${color || ''}">${val}</div></div>`;
+  let html = card('筛选结果', total);
+  STATUS_ORDER.forEach((s) => { html += card(s, count[s] || 0, statusColor[s]); });
+  $('statsBar').innerHTML = html;
+}
+
+// ===== 表格渲染 =====
+function renderTable(list) {
+  $('resultCount').textContent = `共 ${list.length} 条`;
+  const totalPages = Math.max(1, Math.ceil(list.length / state.pageSize));
+  if (state.page > totalPages) state.page = totalPages;
+  const start = (state.page - 1) * state.pageSize;
+  const pageItems = list.slice(start, start + state.pageSize);
+  const tbody = $('batchBody');
+
+  if (!pageItems.length) {
+    tbody.innerHTML = '<tr><td colspan="10" class="empty">暂无批次记录，请点击「从平台自动采集批次」或手动添加</td></tr>';
+    $('pager').innerHTML = '';
+    return;
+  }
+
+  tbody.innerHTML = pageItems.map((b) => {
+    const needFix = b.status === '需修改';
+    const reviewHtml = b.review_result === '通过' ? '<span class="review-ok">通过</span>'
+      : b.review_result === '需修改' ? '<span class="review-fix">需修改</span>'
+      : '—';
+    return `<tr class="${needFix ? 'row-need-fix' : ''}">
+      <td><span class="batch-id">${b.batch_id || '-'}</span></td>
       <td>${b.project_type || '-'}</td>
-      <td><span class="batch-status ${sc}">${b.status}</span></td>
-      <td>${b.review_result || '—'}</td>
-      <td>${b.reviewer || '—'}</td>
-      <td style="text-align:center;">${b.round}</td>
-      <td class="progress-cell">${b.progress_current}/${b.progress_total}</td>
-      <td style="text-align:left;white-space:normal;word-break:break-word;">${b.note || ''}</td>
-      <td>
-        <button class="btn-edit" data-id="${b.id}">编辑</button>
-        <button class="btn-del" data-id="${b.id}">删除</button>
+      <td title="${(b.task_combination || '').replace(/"/g, '&quot;')}"><span class="batch-tc">${b.task_combination || '-'}</span></td>
+      <td><span class="badge ${statusClass[b.status] || 'gray'}">${b.status || '-'}</span></td>
+      <td>${reviewHtml}</td>
+      <td>${b.reviewer || '-'}</td>
+      <td><strong>${b.annotator_label}</strong></td>
+      <td class="num">${b.round ?? 0}</td>
+      <td class="batch-created">${fmtTime(b.platform_created_at || b.created_at)}</td>
+      <td class="center">
+        <button class="op-btn" data-edit="${b.id}">编辑</button>
+        <button class="op-btn danger" data-del="${b.id}">删除</button>
       </td>
     </tr>`;
-  }
-  html += '</tbody></table></div>';
-  return html;
+  }).join('');
+
+  let pager = `<span>第 ${state.page} / ${totalPages} 页</span>`;
+  pager += `<button ${state.page <= 1 ? 'disabled' : ''} data-pg="${state.page - 1}">上一页</button>`;
+  pager += `<button ${state.page >= totalPages ? 'disabled' : ''} data-pg="${state.page + 1}">下一页</button>`;
+  pager += `<span>每页 ${state.pageSize} 条</span>`;
+  $('pager').innerHTML = pager;
 }
 
 // ===== 添加批次 =====
@@ -156,6 +163,7 @@ async function addBatch() {
     batch_id: $('f_batch_id').value.trim(),
     annotator_label: $('f_annotator').value.trim(),
     project_type: $('f_project').value,
+    task_combination: $('f_task_combination').value.trim(),
     status: $('f_status').value,
     review_result: $('f_review_result').value,
     reviewer: $('f_reviewer').value.trim(),
@@ -179,14 +187,16 @@ async function addBatch() {
     const json = await res.json();
     if (json.ok) {
       alert('添加成功');
-      // 清空表单
       $('f_batch_id').value = '';
       $('f_annotator').value = '';
+      $('f_task_combination').value = '';
       $('f_note').value = '';
       $('f_progress_current').value = '0';
       $('f_progress_total').value = '0';
       $('f_round').value = '0';
-      loadBatches();
+      $('addFormPanel').style.display = 'none';
+      $('toggleAddForm').textContent = '＋ 手动添加';
+      loadAll();
     } else {
       alert('添加失败: ' + (json.error || '未知错误'));
     }
@@ -196,39 +206,24 @@ async function addBatch() {
 }
 
 // ===== 编辑批次 =====
-async function openEdit(id) {
-  // 获取数据填入编辑表单
-  let url = '/api/batches?';
-  const params = [];
-  if ($('filterDate').value) params.push(`date=${$('filterDate').value}`);
-  if ($('filterStatus').value) params.push(`status=${encodeURIComponent($('filterStatus').value)}`);
-  if ($('filterGroup').value) params.push(`group=${$('filterGroup').value}`);
-  url += params.join('&');
-
-  try {
-    const res = await authFetch(url);
-    if (!res) return;
-    const json = await res.json();
-    const b = json.data.find((x) => String(x.id) === String(id));
-    if (!b) { alert('未找到批次'); return; }
-
-    $('e_id').value = b.id;
-    $('e_batch_id').value = b.batch_id || '';
-    $('e_annotator').value = b.annotator_label || '';
-    $('e_project').value = b.project_type || '';
-    $('e_status').value = b.status || '已分发';
-    $('e_review_result').value = b.review_result || '';
-    $('e_reviewer').value = b.reviewer || '';
-    $('e_round').value = b.round || 0;
-    $('e_progress_current').value = b.progress_current || 0;
-    $('e_progress_total').value = b.progress_total || 0;
-    $('e_date').value = b.date || '';
-    $('e_note').value = b.note || '';
-
-    $('editModal').classList.add('show');
-  } catch (e) {
-    alert('加载失败: ' + e.message);
-  }
+function openEdit(id) {
+  const b = allBatches.find((x) => String(x.id) === String(id));
+  if (!b) { alert('未找到批次'); return; }
+  $('e_id').value = b.id;
+  $('e_batch_id').value = b.batch_id || '';
+  $('e_annotator').value = b.annotator_label || '';
+  $('e_project').value = b.project_type || '';
+  $('e_task_combination').value = b.task_combination || '';
+  $('e_status').value = b.status || '已分发';
+  $('e_review_result').value = b.review_result || '';
+  $('e_reviewer').value = b.reviewer || '';
+  $('e_round').value = b.round || 0;
+  $('e_progress_current').value = b.progress_current || 0;
+  $('e_progress_total').value = b.progress_total || 0;
+  $('e_date').value = b.date || '';
+  $('e_note').value = b.note || '';
+  $('editResult').textContent = '';
+  $('editModal').classList.add('show');
 }
 
 async function saveEdit() {
@@ -237,6 +232,7 @@ async function saveEdit() {
     batch_id: $('e_batch_id').value.trim(),
     annotator_label: $('e_annotator').value.trim(),
     project_type: $('e_project').value,
+    task_combination: $('e_task_combination').value.trim(),
     status: $('e_status').value,
     review_result: $('e_review_result').value,
     reviewer: $('e_reviewer').value.trim(),
@@ -257,7 +253,7 @@ async function saveEdit() {
     const json = await res.json();
     if (json.ok) {
       $('editModal').classList.remove('show');
-      loadBatches();
+      loadAll();
     } else {
       alert('保存失败: ' + (json.error || '未知错误'));
     }
@@ -274,7 +270,7 @@ async function delBatch(id) {
     if (!res) return;
     const json = await res.json();
     if (json.ok) {
-      loadBatches();
+      loadAll();
     } else {
       alert('删除失败: ' + (json.error || '未知错误'));
     }
@@ -300,7 +296,7 @@ async function autoCollect() {
       const summary = json.status_summary ? Object.entries(json.status_summary)
         .map(([k, v]) => `${k}: ${v}`).join('，') : '';
       status.innerHTML = `<span style="color:#2e7d32;">✓ ${json.message}${summary ? '（' + summary + '）' : ''}</span>`;
-      loadBatches();
+      loadAll();
     } else {
       status.innerHTML = `<span style="color:#c62828;">✗ 采集失败: ${json.error || '未知错误'}</span>`;
     }
@@ -316,20 +312,45 @@ async function autoCollect() {
 // ===== 事件绑定 =====
 $('addBatchBtn').addEventListener('click', addBatch);
 $('autoCollectBtn').addEventListener('click', autoCollect);
-$('filterBtn').addEventListener('click', loadBatches);
+$('filterBtn').addEventListener('click', applyFilter);
 $('clearFilterBtn').addEventListener('click', () => {
-  $('filterAnnotator').value = '';
-  $('filterDate').value = '';
   $('filterStatus').value = '';
-  $('filterGroup').value = '';
-  loadBatches();
+  $('filterProject').value = '';
+  $('filterKeyword').value = '';
+  applyFilter();
 });
-// 标注员搜索：输入时延迟触发
-let annotatorTimer;
-$('filterAnnotator').addEventListener('input', () => {
-  clearTimeout(annotatorTimer);
-  annotatorTimer = setTimeout(loadBatches, 350);
+let kwTimer;
+$('filterKeyword').addEventListener('input', () => {
+  clearTimeout(kwTimer);
+  kwTimer = setTimeout(applyFilter, 350);
 });
+$('filterStatus').addEventListener('change', applyFilter);
+$('filterProject').addEventListener('change', applyFilter);
+
+$('toggleAddForm').addEventListener('click', () => {
+  const p = $('addFormPanel');
+  const show = p.style.display === 'none';
+  p.style.display = show ? 'block' : 'none';
+  $('toggleAddForm').textContent = show ? '－ 收起添加' : '＋ 手动添加';
+});
+$('cancelAddBtn').addEventListener('click', () => {
+  $('addFormPanel').style.display = 'none';
+  $('toggleAddForm').textContent = '＋ 手动添加';
+});
+
+$('batchBody').addEventListener('click', (e) => {
+  const editBtn = e.target.closest('[data-edit]');
+  if (editBtn) { openEdit(editBtn.dataset.edit); return; }
+  const delBtn = e.target.closest('[data-del]');
+  if (delBtn) { delBatch(delBtn.dataset.del); }
+});
+$('pager').addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-pg]');
+  if (!btn || btn.disabled) return;
+  state.page = parseInt(btn.dataset.pg, 10);
+  renderTable(state.filtered);
+});
+
 $('logoutBtn').addEventListener('click', redirectToLogin);
 $('closeEdit').addEventListener('click', () => $('editModal').classList.remove('show'));
 $('editModal').addEventListener('click', (e) => {
@@ -339,8 +360,7 @@ $('saveEditBtn').addEventListener('click', saveEdit);
 
 // ===== 初始化 =====
 const today = new Date();
-const p = (n) => String(n).padStart(2, '0');
-const todayStr = `${today.getFullYear()}-${p(today.getMonth() + 1)}-${p(today.getDate())}`;
-$('f_date').value = todayStr;
+const p2 = (n) => String(n).padStart(2, '0');
+$('f_date').value = `${today.getFullYear()}-${p2(today.getMonth() + 1)}-${p2(today.getDate())}`;
 
-loadBatches();
+loadAll();

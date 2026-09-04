@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>标注员工作统计监控</title>
-  <link rel="stylesheet" href="style.css?v=20260823" />
+  <link rel="stylesheet" href="style.css?v=20260904" />
   <style>
     .group-section { margin-bottom: 24px; }
     .group-title { font-size: 16px; font-weight: 700; margin: 16px 0 8px; padding: 8px 12px; border-radius: 6px; }
@@ -19,12 +19,13 @@
     .rank-2 { color: #8a8a8a; }
     .rank-3 { color: #b87333; }
     .group-chart { margin: 10px 0 14px; padding: 12px 14px; background: #fafafa; border: 1px solid #eee; border-radius: 8px; }
-    .chart-row { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
+    .chart-row { display: flex; align-items: center; gap: 10px; margin-bottom: 7px; }
     .chart-row:last-child { margin-bottom: 0; }
     .chart-label { flex: 0 0 64px; font-size: 12px; color: #555; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .chart-track { flex: 1; height: 14px; background: #f0f0f0; border-radius: 7px; overflow: hidden; }
-    .chart-bar { height: 100%; background: linear-gradient(90deg, #42a5f5, #1e88e5); border-radius: 7px; min-width: 0; }
-    .chart-value { flex: 0 0 52px; font-size: 12px; font-weight: 700; color: #1565c0; text-align: right; }
+    .chart-legend { display: flex; gap: 14px; margin-bottom: 10px; font-size: 12px; color: #666; }
+    .chart-legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 5px; vertical-align: -2px; }
+    .lg-new { background: linear-gradient(90deg, #5aa7ff, #1e88e5); }
+    .lg-old { background: linear-gradient(90deg, #ffd54f, #ffb300); }
     .src-badge { display: inline-block; padding: 1px 6px; border-radius: 4px; font-size: 11px; font-weight: 600; }
     .src-auto { background: #e8eaf6; color: #3949ab; }
     .src-manual { background: #fff3e0; color: #e65100; }
@@ -72,11 +73,16 @@
 
   <main class="container">
     <!-- 导航 -->
-    <div class="nav-tabs" style="display:flex;gap:0;margin-bottom:20px;border-bottom:2px solid #e0e0e0;">
-      <a href="/" style="padding:10px 24px;text-decoration:none;color:#111;font-weight:600;border-bottom:3px solid #111;margin-bottom:-2px;">统计监控</a>
-      <a href="/batches" style="padding:10px 24px;text-decoration:none;color:#666;font-weight:600;border-bottom:3px solid transparent;margin-bottom:-2px;">批次管理</a>
-      <a href="/salary" style="padding:10px 24px;text-decoration:none;color:#666;font-weight:600;border-bottom:3px solid transparent;margin-bottom:-2px;">薪资计算</a>
-    </div>
+    <nav class="main-nav">
+      <div class="nav-item-parent active">
+        <span class="nav-parent">统计监控</span>
+        <div class="nav-children">
+          <a href="/" class="nav-child active">时长监控</a>
+          <a href="/batches" class="nav-child">批次管理</a>
+        </div>
+      </div>
+      <a href="/salary" class="nav-item">薪资计算</a>
+    </nav>
 
     <div class="note-banner">
       数据说明：<strong>2026-08-22 及之前</strong>为历史数据（原始时长 = 新任务 + 旧任务）；
@@ -204,6 +210,6 @@
     <span id="footStatus"></span>
   </footer>
 
-  <script src="app.js?v=20260823b"></script>
+  <script src="app.js?v=20260904"></script>
 </body>
 </html>

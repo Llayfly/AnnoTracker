@@ -10,8 +10,8 @@ function fmtDate(d) {
   return `${y}-${m}-${day}`;
 }
 
-// GET /api/batches?date=YYYY-MM-DD&group=HC|C&status=需修改&annotator=HC3
-// POST /api/batches  body: { batch_id, annotator_label, project_type, status, review_result, reviewer, round, progress_current, progress_total, date, note }
+// GET /api/batches?date=YYYY-MM-DD&group=HC|C&status=需修改&project=xx&keyword=HC3&annotator=HC3
+// POST /api/batches  body: { batch_id, annotator_label, project_type, task_combination, status, review_result, reviewer, round, progress_current, progress_total, date, note }
 // PUT /api/batches?id=xxx  body: { ...fields }
 // DELETE /api/batches?id=xxx
 module.exports = requireAuth(async (req, res) => {
@@ -21,7 +21,7 @@ module.exports = requireAuth(async (req, res) => {
   // ===== GET: 获取批次列表 =====
   if (req.method === 'GET') {
     try {
-      const { date, group, status, annotator } = req.query;
+      const { date, group, status, project, keyword, annotator } = req.query;
       let sql = 'SELECT * FROM batches WHERE 1=1';
       const args = [];
 
@@ -32,6 +32,15 @@ module.exports = requireAuth(async (req, res) => {
       if (status) {
         sql += ' AND status = ?';
         args.push(status);
+      }
+      if (project) {
+        sql += ' AND project_type = ?';
+        args.push(project);
+      }
+      if (keyword) {
+        sql += ' AND (batch_id LIKE ? OR annotator_label LIKE ? OR project_type LIKE ? OR task_combination LIKE ?)';
+        const kw = `%${keyword}%`;
+        args.push(kw, kw, kw, kw);
       }
       if (annotator) {
         sql += ' AND annotator_label LIKE ?';
@@ -67,13 +76,14 @@ module.exports = requireAuth(async (req, res) => {
       const now = new Date().toISOString();
       await db.execute({
         sql: `INSERT INTO batches
-          (batch_id, annotator_label, project_type, status, review_result, reviewer,
-           round, progress_current, progress_total, date, note, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          (batch_id, annotator_label, project_type, task_combination, status, review_result, reviewer,
+           round, progress_current, progress_total, date, platform_created_at, note, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         args: [
           b.batch_id || null,
           b.annotator_label,
           b.project_type || '',
+          b.task_combination || '',
           b.status || '已分发',
           b.review_result || null,
           b.reviewer || null,
@@ -81,6 +91,7 @@ module.exports = requireAuth(async (req, res) => {
           parseInt(b.progress_current) || 0,
           parseInt(b.progress_total) || 0,
           b.date,
+          b.platform_created_at || null,
           b.note || '',
           now, now,
         ],
@@ -103,8 +114,8 @@ module.exports = requireAuth(async (req, res) => {
 
       const fields = [];
       const args = [];
-      const allowed = ['batch_id', 'annotator_label', 'project_type', 'status', 'review_result',
-        'reviewer', 'round', 'progress_current', 'progress_total', 'date', 'note'];
+      const allowed = ['batch_id', 'annotator_label', 'project_type', 'task_combination', 'status', 'review_result',
+        'reviewer', 'round', 'progress_current', 'progress_total', 'date', 'platform_created_at', 'note'];
 
       for (const f of allowed) {
         if (b[f] !== undefined) {

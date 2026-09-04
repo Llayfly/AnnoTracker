@@ -129,6 +129,8 @@ function renderGroups(rows, opts) {
   const groups = { HC: [], C: [], HBHC: [], S: [], JS: [], other: [] };
   rows.forEach((r) => { groups[getGroup(r.label)].push(r); });
 
+  const f2 = (x) => (Math.round(x * 100) / 100).toFixed(2).replace(/\.?0+$/, '');
+
   let html = '';
   for (const [gkey, items] of Object.entries(groups)) {
     if (!items.length) continue;
@@ -136,18 +138,40 @@ function renderGroups(rows, opts) {
     html += `<div class="group-section">`;
     html += `<div class="group-title ${cfg.cls}">${cfg.title}（${items.length} 人）</div>`;
 
-    // 柱状图：每个标注员的时长（降序）
+    // 柱状图：历史数据 = 新任务(蓝)+旧任务(黄)双色堆叠；新数据 = 单色；时长写进柱内
+    const split = !!opts.split;
     const chartField = opts.chartField || 'raw_hours';
-    const chartItems = items.slice().sort((a, b) => (Number(b[chartField]) || 0) - (Number(a[chartField]) || 0));
-    const maxV = Math.max(...chartItems.map((i) => Number(i[chartField]) || 0), 0.001);
+    const totalOf = (i) => split
+      ? (Number(i.new_task_hours) || 0) + (Number(i.old_task_hours) || 0)
+      : (Number(i[chartField]) || 0);
+    const chartItems = items.slice().sort((a, b) => totalOf(b) - totalOf(a));
+    const maxV = Math.max(...chartItems.map(totalOf), 0.001);
+
     html += `<div class="group-chart">`;
+    if (split) {
+      html += `<div class="chart-legend"><span><i class="lg-new"></i>新任务(h)</span><span><i class="lg-old"></i>旧任务(h)</span></div>`;
+    }
     html += chartItems.map((r) => {
+      if (split) {
+        const vNew = Number(r.new_task_hours) || 0;
+        const vOld = Number(r.old_task_hours) || 0;
+        const pctNew = Math.max(Math.round(vNew / maxV * 100), vNew > 0 ? 2 : 0);
+        const pctOld = Math.max(Math.round(vOld / maxV * 100), vOld > 0 ? 2 : 0);
+        return `<div class="chart-row" title="${r.label} ${opts.chartTitle}：新任务 ${f2(vNew)}h / 旧任务 ${f2(vOld)}h">
+          <span class="chart-label">${r.label}</span>
+          <div class="chart-track">
+            <div class="chart-bar bar-new" style="width:${pctNew}%">${pctNew >= 12 ? `<span class="bar-label">${f2(vNew)}h</span>` : ''}</div>
+            <div class="chart-bar bar-old" style="width:${pctOld}%">${pctOld >= 14 ? `<span class="bar-label">${f2(vOld)}h</span>` : ''}</div>
+          </div>
+          <span class="chart-value"><span class="cv-new">新 ${f2(vNew)}</span><span class="cv-old">旧 ${f2(vOld)}</span></span>
+        </div>`;
+      }
       const v = Number(r[chartField]) || 0;
       const pct = Math.max(Math.round(v / maxV * 100), v > 0 ? 2 : 0);
-      return `<div class="chart-row" title="${r.label} ${opts.chartTitle} ${v} h">
+      return `<div class="chart-row" title="${r.label} ${opts.chartTitle} ${f2(v)} h">
         <span class="chart-label">${r.label}</span>
-        <div class="chart-track"><div class="chart-bar" style="width:${pct}%"></div></div>
-        <span class="chart-value">${v}</span>
+        <div class="chart-track"><div class="chart-bar bar-new" style="width:${pct}%">${pct >= 14 ? `<span class="bar-label">${f2(v)}h</span>` : ''}</div></div>
+        <span class="chart-value"><span class="cv-new">${f2(v)}h</span></span>
       </div>`;
     }).join('');
     html += `</div>`;
@@ -223,7 +247,8 @@ async function loadSummary() {
       html += `<div class="section-divider old">历史数据（2026-08-22 及之前）· 原始时长 = 新任务 + 旧任务</div>`;
       html += renderGroups(oldRows, {
         chartField: 'new_task_hours',
-        chartTitle: '新任务',
+        chartTitle: '历史',
+        split: true,
         columns: OLD_COLUMNS,
       });
     }

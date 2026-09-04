@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>薪资计算</title>
-  <link rel="stylesheet" href="style.css?v=20260819b" />
+  <link rel="stylesheet" href="style.css?v=20260904" />
   <style>
     .salary-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
     .salary-table th, .salary-table td { padding: 8px 10px; text-align: right; border-bottom: 1px solid #eee; font-size: 13px; }
@@ -53,11 +53,16 @@
 
   <main class="container">
     <!-- 导航 -->
-    <div class="nav-tabs" style="display:flex;gap:0;margin-bottom:20px;border-bottom:2px solid #e0e0e0;">
-      <a href="/" style="padding:10px 24px;text-decoration:none;color:#666;font-weight:600;border-bottom:3px solid transparent;margin-bottom:-2px;">统计监控</a>
-      <a href="/batches" style="padding:10px 24px;text-decoration:none;color:#666;font-weight:600;border-bottom:3px solid transparent;margin-bottom:-2px;">批次管理</a>
-      <a href="/salary" style="padding:10px 24px;text-decoration:none;color:#111;font-weight:600;border-bottom:3px solid #111;margin-bottom:-2px;">薪资计算</a>
-    </div>
+    <nav class="main-nav">
+      <div class="nav-item-parent active">
+        <span class="nav-parent">统计监控</span>
+        <div class="nav-children">
+          <a href="/" class="nav-child">时长监控</a>
+          <a href="/batches" class="nav-child">批次管理</a>
+        </div>
+      </div>
+      <a href="/salary" class="nav-item active">薪资计算</a>
+    </nav>
 
     <!-- 控制面板 -->
     <section class="panel controls">
