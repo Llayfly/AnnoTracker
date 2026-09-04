@@ -1,6 +1,7 @@
 const platformApi = require('../lib/platformApi');
+const { requireAuth } = require('../lib/auth');
 
-module.exports = async (req, res) => {
+module.exports = requireAuth(async (req, res) => {
   try {
     await platformApi.getToken();
     res.status(200).json({
@@ -18,4 +19,4 @@ module.exports = async (req, res) => {
       latest_collect: null,
     });
   }
-};
+});

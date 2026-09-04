@@ -3,11 +3,46 @@ let currentRange = '1d';
 let currentSearch = '';
 let allData = [];
 let autoRefreshTimer = null;
+let isAuthenticated = false;
+
+// ========== 认证检查 ==========
+
+async function checkAuth() {
+  try {
+    const resp = await fetch('/api/check-auth');
+    const data = await resp.json();
+    if (!data.authenticated) {
+      window.location.href = '/login.html';
+      return false;
+    }
+    isAuthenticated = true;
+    const userInfo = document.getElementById('user-info');
+    if (userInfo) {
+      userInfo.textContent = data.username || '';
+      userInfo.style.display = 'inline-block';
+    }
+    return true;
+  } catch {
+    window.location.href = '/login.html';
+    return false;
+  }
+}
+
+async function logout() {
+  try {
+    await fetch('/api/logout', { method: 'POST' });
+  } catch {}
+  window.location.href = '/login.html';
+}
 
 // ========== API 调用 ==========
 
 async function fetchAPI(url) {
   const response = await fetch(url);
+  if (response.status === 401) {
+    window.location.href = '/login.html';
+    throw new Error('登录已过期，请重新登录');
+  }
   if (!response.ok) throw new Error(`API错误: ${response.status}`);
   return response.json();
 }
@@ -447,7 +482,9 @@ function startAutoRefresh() {
 
 // ========== 初始化 ==========
 
-window.addEventListener('DOMContentLoaded', () => {
+window.addEventListener('DOMContentLoaded', async () => {
+  const authed = await checkAuth();
+  if (!authed) return;
   loadStats();
   loadHealth();
   startAutoRefresh();

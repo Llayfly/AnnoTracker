@@ -1,7 +1,8 @@
 const platformApi = require('../../lib/platformApi');
 const { secondsToHours, getAlertLevel, formatDate } = require('../../lib/helpers');
+const { requireAuth } = require('../../lib/auth');
 
-module.exports = async (req, res) => {
+module.exports = requireAuth(async (req, res) => {
   try {
     const { label, startDate, endDate } = req.query;
 
@@ -58,4 +59,4 @@ module.exports = async (req, res) => {
     console.error('[API /stats/:label] Error:', error);
     res.status(500).json({ error: error.message });
   }
-};
+});

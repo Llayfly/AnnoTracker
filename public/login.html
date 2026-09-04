@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>登录 - 标注员工作统计监控系统</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="login-body">
+  <div class="login-wrapper">
+    <div class="login-card">
+      <div class="login-logo">
+        <h1>标注员工作统计监控系统</h1>
+        <p>请登录后查看统计数据</p>
+      </div>
+      <form id="login-form" class="login-form">
+        <div class="login-field">
+          <label for="username">用户名</label>
+          <input type="text" id="username" name="username" placeholder="请输入用户名" autocomplete="username" required>
+        </div>
+        <div class="login-field">
+          <label for="password">密码</label>
+          <input type="password" id="password" name="password" placeholder="请输入密码" autocomplete="current-password" required>
+        </div>
+        <div id="login-error" class="login-error" style="display:none;"></div>
+        <button type="submit" id="login-btn" class="login-btn">登 录</button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    // Check if already logged in
+    fetch('/api/check-auth').then(r => r.json()).then(data => {
+      if (data.authenticated) {
+        window.location.href = '/';
+      }
+    }).catch(() => {});
+
+    document.getElementById('login-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('login-btn');
+      const errBox = document.getElementById('login-error');
+      const username = document.getElementById('username').value;
+      const password = document.getElementById('password').value;
+
+      btn.disabled = true;
+      btn.textContent = '登录中...';
+      errBox.style.display = 'none';
+
+      try {
+        const resp = await fetch('/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password }),
+        });
+        const data = await resp.json();
+
+        if (resp.ok && data.success) {
+          window.location.href = '/';
+        } else {
+          errBox.textContent = data.error || '登录失败';
+          errBox.style.display = 'block';
+          btn.disabled = false;
+          btn.textContent = '登 录';
+        }
+      } catch (err) {
+        errBox.textContent = '网络错误，请重试';
+        errBox.style.display = 'block';
+        btn.disabled = false;
+        btn.textContent = '登 录';
+      }
+    });
+  </script>
+</body>
+</html>
