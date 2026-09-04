@@ -554,6 +554,37 @@ body {
   text-align: center;
 }
 
+/* 密码可见性切换 */
+.login-password-wrapper {
+  position: relative;
+}
+
+.login-password-wrapper input {
+  width: 100%;
+  padding-right: 44px;
+}
+
+.toggle-pwd-btn {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #a0aec0;
+  padding: 4px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s;
+}
+
+.toggle-pwd-btn:hover {
+  color: #667eea;
+}
+
 /* 登出按钮 */
 .logout-btn {
   background: #e53e3e;
