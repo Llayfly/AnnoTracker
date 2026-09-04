@@ -240,8 +240,8 @@ function renderChart() {
         <div class="h-bar-row ${alertClass}" onclick="showDetail('${a.annotator_label}')">
           <div class="h-bar-label">${a.annotator_label}</div>
           <div class="h-bar-track">
-            <div class="h-bar-fill-new" style="width: ${newPct}%"></div>
-            <div class="h-bar-fill-old" style="width: ${oldPct}%"></div>
+            <div class="h-bar-fill-new" style="width: ${newPct}%">${newTaskHours >= 0.1 ? `<span class="h-bar-segment-label">${newTaskHours.toFixed(1)}h</span>` : ''}</div>
+            <div class="h-bar-fill-old" style="width: ${oldPct}%">${oldTaskHours >= 0.1 ? `<span class="h-bar-segment-label">${oldTaskHours.toFixed(1)}h</span>` : ''}</div>
           </div>
           <div class="h-bar-value">${totalHours.toFixed(1)}h</div>
           <div class="h-bar-tooltip">
