@@ -7,18 +7,35 @@ let isAuthenticated = false;
 
 // ========== 认证检查 ==========
 
+function getAuthToken() {
+  return localStorage.getItem('auth_token') || '';
+}
+
+function getAuthUsername() {
+  return localStorage.getItem('auth_username') || '';
+}
+
 async function checkAuth() {
+  const token = getAuthToken();
+  if (!token) {
+    window.location.href = '/login.html';
+    return false;
+  }
   try {
-    const resp = await fetch('/api/check-auth');
+    const resp = await fetch('/api/check-auth', {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
     const data = await resp.json();
     if (!data.authenticated) {
+      localStorage.removeItem('auth_token');
+      localStorage.removeItem('auth_username');
       window.location.href = '/login.html';
       return false;
     }
     isAuthenticated = true;
     const userInfo = document.getElementById('user-info');
     if (userInfo) {
-      userInfo.textContent = data.username || '';
+      userInfo.textContent = getAuthUsername() || data.username || '';
       userInfo.style.display = 'inline-block';
     }
     return true;
@@ -29,6 +46,8 @@ async function checkAuth() {
 }
 
 async function logout() {
+  localStorage.removeItem('auth_token');
+  localStorage.removeItem('auth_username');
   try {
     await fetch('/api/logout', { method: 'POST' });
   } catch {}
@@ -38,8 +57,13 @@ async function logout() {
 // ========== API 调用 ==========
 
 async function fetchAPI(url) {
-  const response = await fetch(url);
+  const token = getAuthToken();
+  const response = await fetch(url, {
+    headers: token ? { 'Authorization': 'Bearer ' + token } : {}
+  });
   if (response.status === 401) {
+    localStorage.removeItem('auth_token');
+    localStorage.removeItem('auth_username');
     window.location.href = '/login.html';
     throw new Error('登录已过期，请重新登录');
   }
