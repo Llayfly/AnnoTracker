@@ -8,6 +8,12 @@
 </head>
 <body>
   <div id="app">
+    <!-- 导航栏 -->
+    <nav class="nav-bar">
+      <a href="/" class="nav-link active">时长监控</a>
+      <a href="/batches.html" class="nav-link">批次管理</a>
+    </nav>
+
     <!-- 头部 -->
     <header class="header">
       <div class="header-left">
@@ -79,29 +85,6 @@
           <div id="modal-summary" class="modal-summary"></div>
           <div id="detail-chart-area" class="detail-chart-area"></div>
         </div>
-      </div>
-    </div>
-
-    <!-- 批次管理 -->
-    <div class="logs-section">
-      <h3 onclick="toggleLogs()">批次管理 ▶</h3>
-      <div id="logs-content" style="display:none;">
-        <table id="logs-table">
-          <thead>
-            <tr>
-              <th>查询时间</th>
-              <th>日期范围</th>
-              <th>标注员数</th>
-              <th>组织数</th>
-              <th>新增总时长(h)</th>
-              <th>旧任务总时长(h)</th>
-              <th>原始总时长(h)</th>
-              <th>耗时(秒)</th>
-              <th>状态</th>
-            </tr>
-          </thead>
-          <tbody id="logs-tbody"></tbody>
-        </table>
       </div>
     </div>
 

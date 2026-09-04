@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>批次管理 - 标注员工作统计监控系统</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div id="app">
+    <!-- 导航栏 -->
+    <nav class="nav-bar">
+      <a href="/" class="nav-link">时长监控</a>
+      <a href="/batches.html" class="nav-link active">批次管理</a>
+    </nav>
+
+    <!-- 头部 -->
+    <header class="header">
+      <div class="header-left">
+        <h1>批次管理</h1>
+        <span class="subtitle">数据来源：data-platform.synapath.com</span>
+      </div>
+      <div class="header-right">
+        <span id="user-info" class="user-info" style="display:none;"></span>
+        <span id="last-update" class="last-update">加载中...</span>
+        <button id="refresh-btn" class="btn btn-sm" onclick="loadBatches()">刷新</button>
+        <button id="logout-btn" class="btn btn-sm logout-btn" onclick="logout()">退出</button>
+      </div>
+    </header>
+
+    <!-- 控制栏 -->
+    <div class="controls">
+      <div class="time-range">
+        <button class="range-btn active" data-range="1d" onclick="selectBatchRange('1d')">最近1天</button>
+        <button class="range-btn" data-range="3d" onclick="selectBatchRange('3d')">最近3天</button>
+        <button class="range-btn" data-range="1w" onclick="selectBatchRange('1w')">最近1周</button>
+        <button class="range-btn" data-range="15d" onclick="selectBatchRange('15d')">最近半个月</button>
+        <button class="range-btn" data-range="1m" onclick="selectBatchRange('1m')">最近1月</button>
+      </div>
+      <div class="custom-range">
+        <input type="date" id="custom-start" onchange="customBatchSearch()">
+        <span>至</span>
+        <input type="date" id="custom-end" onchange="customBatchSearch()">
+        <button class="btn btn-sm" onclick="customBatchSearch()">查询</button>
+      </div>
+      <div class="search-box">
+        <input type="text" id="search-input" placeholder="搜索标注员..." oninput="handleBatchSearch()">
+      </div>
+    </div>
+
+    <!-- 批次表格 -->
+    <div class="chart-container">
+      <div class="chart-header">
+        <h2 id="batch-title">批次管理</h2>
+        <button class="btn btn-sm export-btn" onclick="exportBatchCSV()">导出CSV</button>
+      </div>
+      <div id="batch-area" class="batch-area">
+        <div class="chart-loading">加载中...</div>
+      </div>
+    </div>
+
+    <footer class="footer">
+      <p>标注员工作统计监控系统 v2.0 | 批次管理 | 数据从平台直接获取</p>
+    </footer>
+  </div>
+
+  <script>
+    let currentBatchRange = '1d';
+    let currentBatchSearch = '';
+    let allBatchData = [];
+
+    function getAuthToken() {
+      return localStorage.getItem('auth_token') || '';
+    }
+
+    function getAuthUsername() {
+      return localStorage.getItem('auth_username') || '';
+    }
+
+    async function checkAuth() {
+      const token = getAuthToken();
+      if (!token) { window.location.href = '/login.html'; return false; }
+      try {
+        const resp = await fetch('/api/check-auth', {
+          headers: { 'Authorization': 'Bearer ' + token }
+        });
+        const data = await resp.json();
+        if (!data.authenticated) {
+          localStorage.removeItem('auth_token');
+          localStorage.removeItem('auth_username');
+          window.location.href = '/login.html';
+          return false;
+        }
+        const userInfo = document.getElementById('user-info');
+        if (userInfo) {
+          userInfo.textContent = getAuthUsername() || data.username || '';
+          userInfo.style.display = 'inline-block';
+        }
+        return true;
+      } catch {
+        window.location.href = '/login.html';
+        return false;
+      }
+    }
+
+    async function logout() {
+      localStorage.removeItem('auth_token');
+      localStorage.removeItem('auth_username');
+      try { await fetch('/api/logout', { method: 'POST' }); } catch {}
+      window.location.href = '/login.html';
+    }
+
+    async function fetchAPI(url) {
+      const token = getAuthToken();
+      const response = await fetch(url, {
+        headers: token ? { 'Authorization': 'Bearer ' + token } : {}
+      });
+      if (response.status === 401) {
+        window.location.href = '/login.html';
+        throw new Error('登录已过期');
+      }
+      if (!response.ok) throw new Error(`API错误: ${response.status}`);
+      return response.json();
+    }
+
+    function getRangeDates(range) {
+      const end = new Date();
+      const start = new Date();
+      const fmt = d => d.toISOString().split('T')[0];
+      switch(range) {
+        case '1d': break;
+        case '3d': start.setDate(start.getDate() - 2); break;
+        case '1w': start.setDate(start.getDate() - 6); break;
+        case '15d': start.setDate(start.getDate() - 14); break;
+        case '1m': start.setMonth(start.getMonth() - 1); break;
+        default: break;
+      }
+      return { start: fmt(start), end: fmt(end) };
+    }
+
+    async function loadBatches(startDate, endDate) {
+      const batchArea = document.getElementById('batch-area');
+      batchArea.innerHTML = '<div class="chart-loading">加载中...</div>';
+
+      try {
+        let start, end;
+        if (startDate && endDate) {
+          start = startDate;
+          end = endDate;
+        } else {
+          const dr = getRangeDates(currentBatchRange);
+          start = dr.start;
+          end = dr.end;
+        }
+
+        let url = `/api/stats?range=&startDate=${start}&endDate=${end}`;
+        if (currentBatchSearch) {
+          url += `&annotator=${encodeURIComponent(currentBatchSearch)}`;
+        }
+
+        const data = await fetchAPI(url);
+        allBatchData = data.annotators || [];
+        document.getElementById('batch-title').textContent =
+          `批次管理（${start} 至 ${end}）`;
+
+        renderBatches();
+        document.getElementById('last-update').textContent =
+          `最后更新: ${new Date().toLocaleTimeString('zh-CN')}`;
+      } catch (error) {
+        batchArea.innerHTML = `<div class="chart-loading">加载失败: ${error.message}</div>`;
+      }
+    }
+
+    function renderBatches() {
+      const batchArea = document.getElementById('batch-area');
+
+      if (allBatchData.length === 0) {
+        batchArea.innerHTML = '<div class="chart-loading">暂无数据</div>';
+        return;
+      }
+
+      let html = '<div class="batch-table-wrapper"><table class="batch-table">';
+      html += `
+        <thead>
+          <tr>
+            <th>标注员</th>
+            <th>组织</th>
+            <th>新增任务(h)</th>
+            <th>旧任务(h)</th>
+            <th>原始时长(h)</th>
+            <th>片段时长(h)</th>
+            <th>无片段时长(h)</th>
+            <th>无片段等效(h)</th>
+            <th>结算参考(h)</th>
+            <th>累计参考(h)</th>
+            <th>日均时长(h)</th>
+            <th>活跃天数</th>
+          </tr>
+        </thead>
+        <tbody>
+      `;
+
+      for (const a of allBatchData) {
+        html += `
+          <tr>
+            <td>${a.annotator_label || '-'}</td>
+            <td>${a.organization || '-'}</td>
+            <td class="cell-blue">${a.total_new_task_hours || '0'}</td>
+            <td class="cell-yellow">${a.total_old_task_hours || '0'}</td>
+            <td><strong>${a.total_raw_hours || '0'}</strong></td>
+            <td>${a.total_segment_hours || '0'}</td>
+            <td>${a.total_no_clip_hours || '0'}</td>
+            <td>${a.total_no_clip_equivalent_hours || '0'}</td>
+            <td>${a.total_settlement_hours || '0'}</td>
+            <td>${a.latest_cumulative_reference_hours || '0'}</td>
+            <td>${a.avg_daily_hours || '0'}</td>
+            <td>${a.active_days || 0}</td>
+          </tr>
+        `;
+      }
+
+      html += '</tbody></table></div>';
+      batchArea.innerHTML = html;
+    }
+
+    function selectBatchRange(range) {
+      currentBatchRange = range;
+      document.querySelectorAll('.range-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.range === range);
+      });
+      document.getElementById('custom-start').value = '';
+      document.getElementById('custom-end').value = '';
+      loadBatches();
+    }
+
+    function handleBatchSearch() {
+      currentBatchSearch = document.getElementById('search-input').value.trim();
+      loadBatches();
+    }
+
+    function customBatchSearch() {
+      const start = document.getElementById('custom-start').value;
+      const end = document.getElementById('custom-end').value;
+      if (start && end) {
+        currentBatchRange = '';
+        document.querySelectorAll('.range-btn').forEach(btn => btn.classList.remove('active'));
+        loadBatches(start, end);
+      }
+    }
+
+    function exportBatchCSV() {
+      if (allBatchData.length === 0) { alert('暂无数据可导出'); return; }
+      const headers = ['标注员','组织','新增任务(h)','旧任务(h)','原始时长(h)','片段时长(h)','无片段时长(h)','无片段等效(h)','结算参考(h)','累计参考(h)','日均时长(h)','活跃天数'];
+      const rows = allBatchData.map(a => [
+        a.annotator_label || '', a.organization || '',
+        a.total_new_task_hours || '0', a.total_old_task_hours || '0',
+        a.total_raw_hours || '0', a.total_segment_hours || '0',
+        a.total_no_clip_hours || '0', a.total_no_clip_equivalent_hours || '0',
+        a.total_settlement_hours || '0', a.latest_cumulative_reference_hours || '0',
+        a.avg_daily_hours || '0', a.active_days || 0
+      ].join(','));
+      const csv = '\uFEFF' + headers.join(',') + '\n' + rows.join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `批次管理_${new Date().toISOString().split('T')[0]}.csv`;
+      link.click();
+      URL.revokeObjectURL(url);
+    }
+
+    window.addEventListener('DOMContentLoaded', async () => {
+      const authed = await checkAuth();
+      if (!authed) return;
+      loadBatches();
+    });
+  </script>
+</body>
+</html>

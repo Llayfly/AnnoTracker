@@ -18,6 +18,38 @@ body {
   padding: 16px;
 }
 
+/* 导航栏 */
+.nav-bar {
+  display: flex;
+  gap: 0;
+  margin-bottom: 16px;
+  background: white;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+}
+
+.nav-link {
+  padding: 12px 24px;
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 600;
+  color: #666;
+  transition: all 0.2s;
+  border-bottom: 3px solid transparent;
+}
+
+.nav-link:hover {
+  color: #667eea;
+  background: #f8f9ff;
+}
+
+.nav-link.active {
+  color: #667eea;
+  border-bottom-color: #667eea;
+  background: #f0f4ff;
+}
+
 /* 头部 */
 .header {
   display: flex;
@@ -269,7 +301,7 @@ body {
   height: 24px;
   background: #f0f0f0;
   border-radius: 4px;
-  overflow: hidden;
+  overflow: visible;
   position: relative;
   display: flex;
 }
@@ -282,8 +314,9 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-width: 0;
-  overflow: hidden;
+  min-width: 28px;
+  overflow: visible;
+  flex-shrink: 0;
 }
 
 .h-bar-fill-old {
@@ -293,18 +326,22 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-width: 0;
-  overflow: hidden;
+  min-width: 28px;
+  overflow: visible;
+  flex-shrink: 0;
 }
 
 .h-bar-segment-label {
   font-size: 11px;
   font-weight: 700;
   color: white;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+  text-shadow: 0 1px 2px rgba(0,0,0,0.4);
   white-space: nowrap;
   padding: 0 4px;
   user-select: none;
+  pointer-events: none;
+  position: relative;
+  z-index: 2;
 }
 
 .h-bar-value {
@@ -623,4 +660,61 @@ body {
   .header { flex-direction: column; gap: 10px; text-align: center; }
   .legend-bar { flex-direction: column; gap: 8px; }
   .bar-col { min-width: 50px; }
+  .nav-bar { flex-direction: column; }
+  .batch-table-wrapper { overflow-x: scroll; }
+}
+
+/* ========== 批次管理表格 ========== */
+.batch-area {
+  padding: 20px;
+  min-height: 300px;
+  overflow-x: auto;
+}
+
+.batch-table-wrapper {
+  overflow-x: auto;
+}
+
+.batch-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.batch-table thead {
+  background: #f8f9fa;
+}
+
+.batch-table th {
+  padding: 10px 12px;
+  text-align: center;
+  font-weight: 600;
+  color: #555;
+  border-bottom: 2px solid #e2e8f0;
+  white-space: nowrap;
+}
+
+.batch-table td {
+  padding: 8px 12px;
+  text-align: center;
+  border-bottom: 1px solid #f0f0f0;
+  color: #333;
+}
+
+.batch-table tbody tr:hover {
+  background: #f8f9ff;
+}
+
+.batch-table .cell-blue {
+  color: #4299e1;
+  font-weight: 600;
+}
+
+.batch-table .cell-yellow {
+  color: #dd8a1a;
+  font-weight: 600;
+}
+
+.batch-table td strong {
+  color: #333;
 }

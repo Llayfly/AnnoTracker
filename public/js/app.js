@@ -157,34 +157,6 @@ async function loadHealth() {
   }
 }
 
-async function loadLogs() {
-  const tbody = document.getElementById('logs-tbody');
-  const batches = JSON.parse(localStorage.getItem('batch_logs') || '[]');
-
-  if (batches.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:#999;padding:20px;">暂无批次记录</td></tr>';
-    return;
-  }
-
-  tbody.innerHTML = batches.map(log => {
-    const isSuccess = log.status === 'success';
-    const time = new Date(log.time).toLocaleString('zh-CN');
-    return `
-      <tr>
-        <td>${time}</td>
-        <td>${log.date_range || '-'}</td>
-        <td>${log.annotator_count || 0}</td>
-        <td>${log.org_count || 0}</td>
-        <td>${log.total_new_hours || '0'}</td>
-        <td>${log.total_old_hours || '0'}</td>
-        <td>${log.total_raw_hours || '0'}</td>
-        <td>${log.elapsed || '-'}</td>
-        <td class="${isSuccess ? 'status-success' : 'status-error'}">${isSuccess ? '成功' : log.status}</td>
-      </tr>
-    `;
-  }).join('');
-}
-
 // ========== 柱状图渲染 ==========
 
 // 从标注员标签中提取组织前缀
@@ -528,21 +500,6 @@ function exportCSV() {
   link.download = `标注员统计_${new Date().toISOString().split('T')[0]}.csv`;
   link.click();
   URL.revokeObjectURL(url);
-}
-
-// ========== 日志展开/收起 ==========
-
-function toggleLogs() {
-  const content = document.getElementById('logs-content');
-  const h3 = content.previousElementSibling;
-  if (content.style.display === 'none') {
-    content.style.display = 'block';
-    h3.innerHTML = '批次管理 ▼';
-    loadLogs();
-  } else {
-    content.style.display = 'none';
-    h3.innerHTML = '批次管理 ▶';
-  }
 }
 
 // ========== 自动刷新 ==========
