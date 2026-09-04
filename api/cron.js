@@ -1,5 +1,5 @@
 'use strict';
-// GET /api/cron —— 定时采集端点（每天 23:59 北京时间触发）
+// GET /api/cron —— 定时采集端点（每天 01:30 北京时间触发）
 // 供 Vercel Cron 或外部 cron-job.org 调用，通过 CRON_SECRET 密钥验证，无需 JWT 登录
 // 新快照系统：采集最新可用的单日数据（平台每天 00:23 生成前一天数据）
 const { collectSnapshotLatest } = require('../lib/collector');
