@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>标注员工作统计监控系统</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div id="app">
+    <!-- 头部 -->
+    <header class="header">
+      <div class="header-left">
+        <h1>标注员工作统计监控系统</h1>
+        <span class="subtitle">数据来源：data-platform.synapath.com</span>
+      </div>
+      <div class="header-right">
+        <span id="last-update" class="last-update">加载中...</span>
+        <button id="refresh-btn" class="btn btn-sm" onclick="manualRefresh()">刷新</button>
+      </div>
+    </header>
+
+    <!-- 控制栏 -->
+    <div class="controls">
+      <div class="time-range">
+        <button class="range-btn active" data-range="1d" onclick="selectRange('1d')">最近1天</button>
+        <button class="range-btn" data-range="3d" onclick="selectRange('3d')">最近3天</button>
+        <button class="range-btn" data-range="1w" onclick="selectRange('1w')">最近1周</button>
+        <button class="range-btn" data-range="15d" onclick="selectRange('15d')">最近半个月</button>
+        <button class="range-btn" data-range="1m" onclick="selectRange('1m')">最近1月</button>
+      </div>
+      <div class="custom-range">
+        <input type="date" id="custom-start" onchange="customRangeSearch()">
+        <span>至</span>
+        <input type="date" id="custom-end" onchange="customRangeSearch()">
+        <button class="btn btn-sm" onclick="customRangeSearch()">查询</button>
+      </div>
+      <div class="search-box">
+        <input type="text" id="search-input" placeholder="搜索标注员..." oninput="handleSearch()">
+      </div>
+    </div>
+
+    <!-- 图例 -->
+    <div class="legend-bar">
+      <div class="legend-group">
+        <span class="legend-title">柱状图颜色</span>
+        <div class="legend-item">
+          <span class="bar-dot bar-dot-blue"></span>
+          <span>新增任务</span>
+        </div>
+        <div class="legend-item">
+          <span class="bar-dot bar-dot-yellow"></span>
+          <span>旧任务</span>
+        </div>
+      </div>
+      <div class="legend-group">
+        <span class="legend-title">预警等级</span>
+        <div class="legend-item">
+          <span class="dot dot-red"></span>
+          <span>日均不足3小时（预警）</span>
+        </div>
+        <div class="legend-item">
+          <span class="dot dot-blue"></span>
+          <span>日均3-5小时（正常）</span>
+        </div>
+        <div class="legend-item">
+          <span class="dot dot-green"></span>
+          <span>日均超过5小时（活跃）</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 统计卡片 -->
+    <div class="stats-cards">
+      <div class="card card-total">
+        <div class="card-value" id="card-total">-</div>
+        <div class="card-label">标注员总数</div>
+      </div>
+      <div class="card card-red">
+        <div class="card-value" id="card-red">-</div>
+        <div class="card-label">预警（&lt;3h）</div>
+      </div>
+      <div class="card card-blue">
+        <div class="card-value" id="card-blue">-</div>
+        <div class="card-label">正常（3-5h）</div>
+      </div>
+      <div class="card card-green">
+        <div class="card-value" id="card-green">-</div>
+        <div class="card-label">活跃（&gt;5h）</div>
+      </div>
+    </div>
+
+    <!-- 柱状图区域 -->
+    <div class="chart-container">
+      <div class="chart-header">
+        <h2 id="chart-title">标注员工作统计</h2>
+        <button class="btn btn-sm export-btn" onclick="exportCSV()">导出CSV</button>
+      </div>
+      <div id="chart-area" class="chart-area">
+        <div class="chart-loading">加载中...</div>
+      </div>
+    </div>
+
+    <!-- 详情弹窗 -->
+    <div id="detail-modal" class="modal" style="display:none;">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2 id="modal-title">标注员详情</h2>
+          <button class="modal-close" onclick="closeModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div id="modal-summary" class="modal-summary"></div>
+          <div id="detail-chart-area" class="detail-chart-area"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 采集日志 -->
+    <div class="logs-section">
+      <h3 onclick="toggleLogs()">采集日志 ▶</h3>
+      <div id="logs-content" style="display:none;">
+        <table id="logs-table">
+          <thead>
+            <tr>
+              <th>时间</th>
+              <th>日期</th>
+              <th>状态</th>
+              <th>标注员数</th>
+              <th>错误信息</th>
+            </tr>
+          </thead>
+          <tbody id="logs-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <footer class="footer">
+      <p>标注员工作统计监控系统 v2.0 | 自动更新中 | 数据每30分钟同步一次</p>
+    </footer>
+  </div>
+
+  <script src="/js/app.js"></script>
+</body>
+</html>
