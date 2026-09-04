@@ -1,10 +1,9 @@
-const db = require('../../lib/db');
+const platformApi = require('../../lib/platformApi');
 const { secondsToHours, getAlertLevel, formatDate } = require('../../lib/helpers');
 
 module.exports = async (req, res) => {
   try {
-    const { label } = req.query;
-    const { startDate, endDate } = req.query;
+    const { label, startDate, endDate } = req.query;
 
     let start, end;
     const today = new Date();
@@ -19,9 +18,26 @@ module.exports = async (req, res) => {
       start = formatDate(startDay);
     }
 
-    const dailyData = await db.getDailyStatsByDateRange(start, end, label);
+    // Fetch data from platform API for each day in the range
+    const allDayData = await platformApi.fetchRangeStats(start, end);
 
-    const formatted = dailyData.map(d => ({
+    // Collect daily stats for the specific annotator
+    const dailyStats = [];
+    for (const dayData of allDayData) {
+      if (!dayData.success) continue;
+      const row = dayData.dailyRows.find(r => r.annotator_label === label);
+      if (!row) continue;
+
+      const settlement = dayData.settlementMap[label] || {};
+      dailyStats.push({
+        ...row,
+        settlement_reference: settlement.settlement_reference || 0,
+        cumulative_reference: settlement.cumulative_reference || 0,
+        has_settlement: !!settlement.settlement_reference || !!settlement.cumulative_reference,
+      });
+    }
+
+    const formatted = dailyStats.map(d => ({
       ...d,
       raw_hours: secondsToHours(parseFloat(d.raw_duration_seconds) || 0),
       segment_hours: secondsToHours(parseFloat(d.segment_duration_seconds) || 0),

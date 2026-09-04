@@ -1,18 +1,4 @@
 {
-  "crons": [
-    {
-      "path": "/api/cron/collect",
-      "schedule": "0 1 * * *"
-    },
-    {
-      "path": "/api/cron/yesterday",
-      "schedule": "5 0 * * *"
-    },
-    {
-      "path": "/api/cron/backfill",
-      "schedule": "0 6 * * *"
-    }
-  ],
   "functions": {
     "api/**/*.js": {
       "maxDuration": 60

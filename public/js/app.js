@@ -49,13 +49,11 @@ async function loadStats() {
 async function loadHealth() {
   try {
     const data = await fetchAPI('/api/health');
-    if (data.latest_collect) {
-      const log = data.latest_collect;
-      const time = new Date(log.created_at).toLocaleString('zh-CN');
-      document.getElementById('last-update').textContent =
-        `上次采集: ${time}（${log.status === 'success' ? '成功' : '失败'}）`;
+    if (data.status === 'ok') {
+      const time = new Date(data.timestamp).toLocaleString('zh-CN');
+      document.getElementById('last-update').textContent = `平台连接正常 | ${time}`;
     } else {
-      document.getElementById('last-update').textContent = '尚未采集数据';
+      document.getElementById('last-update').textContent = `平台连接异常: ${data.error || '未知'}`;
     }
   } catch (e) {
     document.getElementById('last-update').textContent = '服务器状态未知';
@@ -180,7 +178,7 @@ async function showDetail(label) {
   modal.style.display = 'flex';
 
   try {
-    const data = await fetchAPI(`/api/stats/[label]?label=${encodeURIComponent(label)}&startDate=&endDate=`);
+    const data = await fetchAPI(`/api/stats/${encodeURIComponent(label)}?startDate=&endDate=`);
     const stats = data.daily_stats || [];
 
     // 汇总信息
@@ -347,14 +345,12 @@ function customRangeSearch() {
 
 async function manualRefresh() {
   const btn = document.getElementById('refresh-btn');
-  btn.textContent = '采集中...';
+  btn.textContent = '刷新中...';
   btn.disabled = true;
 
   try {
-    await fetch('/api/collect', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
     await loadStats();
     await loadHealth();
-    await loadLogs();
   } catch (error) {
     console.error('刷新失败:', error);
     alert('刷新失败: ' + error.message);
@@ -434,8 +430,7 @@ function startAutoRefresh() {
   autoRefreshTimer = setInterval(async () => {
     console.log('[AutoRefresh] 自动刷新数据...');
     await loadStats();
-    await loadHealth();
-  }, 5 * 60 * 1000);
+  }, 10 * 60 * 1000);
 }
 
 // ========== 初始化 ==========

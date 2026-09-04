@@ -1,4 +1,4 @@
-const db = require('../lib/db');
+const platformApi = require('../lib/platformApi');
 const { secondsToHours, getAlertLevel, getDateRange } = require('../lib/helpers');
 
 module.exports = async (req, res) => {
@@ -15,8 +15,61 @@ module.exports = async (req, res) => {
       end = dr.end;
     }
 
-    const aggregated = await db.getAggregatedStats(start, end);
+    // Fetch data from platform API for each day in the range
+    const allDayData = await platformApi.fetchRangeStats(start, end);
 
+    // Aggregate data per annotator
+    const annotatorMap = {};
+    for (const dayData of allDayData) {
+      if (!dayData.success) continue;
+      for (const row of dayData.dailyRows) {
+        const label = row.annotator_label;
+        if (!annotatorMap[label]) {
+          annotatorMap[label] = {
+            annotator_label: label,
+            annotator_name: row.annotator_name,
+            organization: row.organization,
+            active_days: 0,
+            total_raw_duration: 0,
+            total_segment_duration: 0,
+            total_no_clip_duration: 0,
+            total_no_clip_equivalent: 0,
+            total_new_task_duration: 0,
+            total_old_task_duration: 0,
+            total_settlement_reference: 0,
+            latest_cumulative_reference: 0,
+            first_active_date: dayData.day,
+            last_active_date: dayData.day,
+          };
+        }
+        const a = annotatorMap[label];
+        a.active_days++;
+        a.total_raw_duration += row.raw_duration_seconds || 0;
+        a.total_segment_duration += row.segment_duration_seconds || 0;
+        a.total_no_clip_duration += row.no_clip_duration_seconds || 0;
+        a.total_no_clip_equivalent += row.no_clip_equivalent_seconds || 0;
+        a.total_new_task_duration += row.new_task_raw_duration_seconds || 0;
+        a.total_old_task_duration += row.old_task_raw_duration_seconds || 0;
+
+        // Update settlement data (use latest day's values)
+        const settlement = dayData.settlementMap[label];
+        if (settlement) {
+          a.total_settlement_reference = settlement.settlement_reference || 0;
+          a.latest_cumulative_reference = settlement.cumulative_reference || 0;
+        }
+
+        if (dayData.day < a.first_active_date) a.first_active_date = dayData.day;
+        if (dayData.day > a.last_active_date) a.last_active_date = dayData.day;
+      }
+    }
+
+    // Convert to array and calculate averages
+    let aggregated = Object.values(annotatorMap).map(a => {
+      a.avg_daily_raw_duration = a.active_days > 0 ? a.total_raw_duration / a.active_days : 0;
+      return a;
+    });
+
+    // Filter by annotator search
     let filtered = aggregated;
     if (annotator) {
       const search = annotator.toLowerCase();
@@ -26,6 +79,10 @@ module.exports = async (req, res) => {
       );
     }
 
+    // Sort by total raw duration descending
+    filtered.sort((a, b) => b.total_raw_duration - a.total_raw_duration);
+
+    // Format results
     const result = filtered.map(a => {
       const avgDailyHours = (parseFloat(a.avg_daily_raw_duration) || 0) / 3600;
       const cumulativeRef = a.latest_cumulative_reference ? (parseFloat(a.latest_cumulative_reference) / 3600).toFixed(2) : '0.00';
