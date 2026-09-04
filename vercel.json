@@ -1,0 +1,29 @@
+{
+  "version": 2,
+  "public": true,
+  "builds": [
+    { "src": "public/**", "use": "@vercel/static" }
+  ],
+  "rewrites": [
+    { "source": "/", "destination": "/public/index.html" }
+  ],
+  "crons": [
+    {
+      "path": "/api/cron/collect",
+      "schedule": "*/30 * * * *"
+    },
+    {
+      "path": "/api/cron/yesterday",
+      "schedule": "5 0 * * *"
+    },
+    {
+      "path": "/api/cron/backfill",
+      "schedule": "0 6 * * *"
+    }
+  ],
+  "functions": {
+    "api/**/*.js": {
+      "maxDuration": 60
+    }
+  }
+}

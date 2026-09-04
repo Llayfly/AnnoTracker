@@ -180,7 +180,7 @@ async function showDetail(label) {
   modal.style.display = 'flex';
 
   try {
-    const data = await fetchAPI(`/api/stats/${encodeURIComponent(label)}?startDate=&endDate=`);
+    const data = await fetchAPI(`/api/stats/[label]?label=${encodeURIComponent(label)}&startDate=&endDate=`);
     const stats = data.daily_stats || [];
 
     // 汇总信息
@@ -385,7 +385,7 @@ function exportCSV() {
   ];
 
   const rows = allData.map(a => {
-    const cumulativeHours = a.latest_cumulative_reference ? (a.latest_cumulative_reference / 3600).toFixed(2) : '0';
+    const cumulativeHours = a.latest_cumulative_reference_hours || '0';
     const alertText = a.alert_level === 'red' ? '预警' : a.alert_level === 'blue' ? '正常' : '活跃';
     return [
       a.annotator_label || '',
