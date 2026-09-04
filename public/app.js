@@ -73,57 +73,8 @@ const groupConfig = {
 
 const r2 = (n) => Math.round(n * 100) / 100;
 
-// 历史数据列（2026-08-22 及之前，原始时长 = 新任务 + 旧任务）
-const OLD_COLUMNS = [
-  { title: '排名', w: '40px' },
-  { title: '标注员' },
-  { title: '原始时长(h)', field: 'raw_hours' },
-  { title: '新任务(h)', field: 'new_task_hours' },
-  { title: '旧任务(h)', field: 'old_task_hours' },
-  { title: '片段时长(h)', field: 'segment_hours' },
-  {
-    title: 'PASS占比',
-    render: (r) => (Number(r.pass_ratio) || 0) + '%',
-    total: (items) => {
-      const s = items.reduce((a, r) => a + (Number(r.raw_hours) || 0), 0);
-      const seg = items.reduce((a, r) => a + (Number(r.segment_hours) || 0), 0);
-      return s > 0 ? Math.round(seg / s * 1000) / 10 + '%' : '0%';
-    },
-  },
-  { title: '累计参考(h)', field: 'cumulative_reference_hours' },
-  {
-    title: '日均新任务(h)',
-    render: (r) => (Number(r.daily_avg_raw_hours) || 0),
-    total: (items) => {
-      const totNew = items.reduce((a, r) => a + (Number(r.new_task_hours) || 0), 0);
-      const maxDays = Math.max(...items.map((i) => Number(i.active_days) || 0), 1);
-      return r2(totNew / maxDays);
-    },
-  },
-];
-
-// 新数据列（2026-08-23 起，原始时长 = 新任务之和）
-const NEW_COLUMNS = [
-  { title: '排名', w: '40px' },
-  { title: '标注员' },
-  { title: '原始时长(h)', field: 'raw_hours' },
-  { title: '旧任务(h)', field: 'old_task_hours' },
-  { title: '片段时长(h)', field: 'segment_hours' },
-  {
-    title: 'PASS占比',
-    render: (r) => (Number(r.pass_ratio) || 0) + '%',
-    total: (items) => {
-      const s = items.reduce((a, r) => a + (Number(r.raw_hours) || 0), 0);
-      const seg = items.reduce((a, r) => a + (Number(r.segment_hours) || 0), 0);
-      return s > 0 ? Math.round(seg / s * 1000) / 10 + '%' : '0%';
-    },
-  },
-  { title: '结算参考(h)', field: 'settlement_reference_hours' },
-  { title: '日均新任务(h)', render: (r) => (Number(r.daily_avg_raw_hours) || 0), total: () => '-' },
-];
-
-// 渲染一组标注员：柱状图 + 分组织表格
-function renderGroups(rows, opts) {
+// 渲染一组标注员：仅柱状图（蓝=新任务 / 黄=旧任务，各自显示时长）
+function renderGroups(rows) {
   if (!rows.length) return '';
   rows.forEach((r, i) => { r._rank = i + 1; });
   const groups = { HC: [], C: [], HBHC: [], S: [], JS: [], other: [] };
@@ -138,77 +89,28 @@ function renderGroups(rows, opts) {
     html += `<div class="group-section">`;
     html += `<div class="group-title ${cfg.cls}">${cfg.title}（${items.length} 人）</div>`;
 
-    // 柱状图：历史数据 = 新任务(蓝)+旧任务(黄)双色堆叠；新数据 = 单色；时长写进柱内
-    const split = !!opts.split;
-    const chartField = opts.chartField || 'raw_hours';
-    const totalOf = (i) => split
-      ? (Number(i.new_task_hours) || 0) + (Number(i.old_task_hours) || 0)
-      : (Number(i[chartField]) || 0);
-    const chartItems = items.slice().sort((a, b) => totalOf(b) - totalOf(a));
+    // 双色堆叠柱状图：蓝=新任务(今日提交) / 黄=旧任务(今日修改)，时长写进柱内
+    const totalOf = (i) => (Number(i.new_task_hours) || 0) + (Number(i.old_task_hours) || 0);
+    const chartItems = items.slice().sort((a2, b2) => totalOf(b2) - totalOf(a2));
     const maxV = Math.max(...chartItems.map(totalOf), 0.001);
 
     html += `<div class="group-chart">`;
-    if (split) {
-      html += `<div class="chart-legend"><span><i class="lg-new"></i>新任务(h)</span><span><i class="lg-old"></i>旧任务(h)</span></div>`;
-    }
+    html += `<div class="chart-legend"><span><i class="lg-new"></i>新任务(h)</span><span><i class="lg-old"></i>旧任务(h)</span></div>`;
     html += chartItems.map((r) => {
-      if (split) {
-        const vNew = Number(r.new_task_hours) || 0;
-        const vOld = Number(r.old_task_hours) || 0;
-        const pctNew = Math.max(Math.round(vNew / maxV * 100), vNew > 0 ? 2 : 0);
-        const pctOld = Math.max(Math.round(vOld / maxV * 100), vOld > 0 ? 2 : 0);
-        return `<div class="chart-row" title="${r.label} ${opts.chartTitle}：新任务 ${f2(vNew)}h / 旧任务 ${f2(vOld)}h">
-          <span class="chart-label">${r.label}</span>
-          <div class="chart-track">
-            <div class="chart-bar bar-new" style="width:${pctNew}%">${pctNew >= 12 ? `<span class="bar-label">${f2(vNew)}h</span>` : ''}</div>
-            <div class="chart-bar bar-old" style="width:${pctOld}%">${pctOld >= 14 ? `<span class="bar-label">${f2(vOld)}h</span>` : ''}</div>
-          </div>
-          <span class="chart-value"><span class="cv-new">新 ${f2(vNew)}</span><span class="cv-old">旧 ${f2(vOld)}</span></span>
-        </div>`;
-      }
-      const v = Number(r[chartField]) || 0;
-      const pct = Math.max(Math.round(v / maxV * 100), v > 0 ? 2 : 0);
-      return `<div class="chart-row" title="${r.label} ${opts.chartTitle} ${f2(v)} h">
+      const vNew = Number(r.new_task_hours) || 0;
+      const vOld = Number(r.old_task_hours) || 0;
+      const pctNew = Math.max(Math.round(vNew / maxV * 100), vNew > 0 ? 2 : 0);
+      const pctOld = Math.max(Math.round(vOld / maxV * 100), vOld > 0 ? 2 : 0);
+      return `<div class="chart-row" data-label="${r.label}" title="${r.label}：新任务 ${f2(vNew)}h / 旧任务 ${f2(vOld)}h" style="cursor:pointer;">
         <span class="chart-label">${r.label}</span>
-        <div class="chart-track"><div class="chart-bar bar-new" style="width:${pct}%">${pct >= 14 ? `<span class="bar-label">${f2(v)}h</span>` : ''}</div></div>
-        <span class="chart-value"><span class="cv-new">${f2(v)}h</span></span>
+        <div class="chart-track">
+          <div class="chart-bar bar-new" style="width:${pctNew}%">${pctNew >= 12 ? `<span class="bar-label">${f2(vNew)}h</span>` : ''}</div>
+          <div class="chart-bar bar-old" style="width:${pctOld}%">${pctOld >= 14 ? `<span class="bar-label">${f2(vOld)}h</span>` : ''}</div>
+        </div>
+        <span class="chart-value"><span class="cv-new">新 ${f2(vNew)}</span><span class="cv-old">旧 ${f2(vOld)}</span></span>
       </div>`;
     }).join('');
-    html += `</div>`;
-
-    // 表格
-    html += `<div class="table-wrap"><table style="width:100%;font-size:13px;table-layout:fixed;border-collapse:collapse;">
-      <thead><tr>`;
-    html += opts.columns.map((c) => `<th style="${c.w ? 'width:' + c.w + ';' : ''}">${c.title}</th>`).join('');
-    html += `</tr></thead><tbody>`;
-
-    items.forEach((r) => {
-      const rank = r._rank;
-      const rankCls = rank <= 3 ? `rank-${rank}` : '';
-      html += `<tr data-label="${r.label}">`;
-      html += `<td class="rank-cell ${rankCls}">${rank}</td>`;
-      html += `<td><strong>${r.label}</strong></td>`;
-      for (const c of opts.columns.slice(2)) {
-        html += `<td class="num">${c.render ? c.render(r) : r[c.field]}</td>`;
-      }
-      html += `</tr>`;
-    });
-
-    // 组织合计
-    html += `<tr style="background:#f0f0f0;font-weight:700;border-top:2px solid #999;">
-      <td></td><td>${gkey} 合计</td>`;
-    for (const c of opts.columns.slice(2)) {
-      if (c.total) {
-        html += `<td class="num">${c.total(items)}</td>`;
-      } else if (c.field) {
-        html += `<td class="num">${r2(items.reduce((s, r) => s + (Number(r[c.field]) || 0), 0))}</td>`;
-      } else {
-        html += `<td class="num"></td>`;
-      }
-    }
-    html += `</tr>`;
-
-    html += '</tbody></table></div></div>';
+    html += `</div></div>`;
   }
   return html;
 }
@@ -244,28 +146,19 @@ async function loadSummary() {
 
     let html = '';
     if (oldRows.length) {
-      html += `<div class="section-divider old">历史数据（2026-08-22 及之前）· 原始时长 = 新任务 + 旧任务</div>`;
-      html += renderGroups(oldRows, {
-        chartField: 'new_task_hours',
-        chartTitle: '历史',
-        split: true,
-        columns: OLD_COLUMNS,
-      });
+      html += `<div class="section-divider old">历史数据（2026-08-22 及之前）· 蓝=新任务 / 黄=旧任务</div>`;
+      html += renderGroups(oldRows);
     }
     if (newRows.length) {
-      html += `<div class="section-divider new">新数据（2026-08-23 起）· 原始时长 = 新任务之和</div>`;
-      html += renderGroups(newRows, {
-        chartField: 'raw_hours',
-        chartTitle: '原始时长',
-        columns: NEW_COLUMNS,
-      });
+      html += `<div class="section-divider new">新数据（2026-08-23 起）· 蓝=今日提交新增 / 黄=今日修改旧任务</div>`;
+      html += renderGroups(newRows);
     }
     if (!html) {
       container.innerHTML = '<p class="empty">该区间暂无数据</p>';
       return;
     }
     container.innerHTML = html;
-    container.querySelectorAll('tr[data-label]').forEach((tr) => {
+    container.querySelectorAll('.chart-row[data-label]').forEach((tr) => {
       tr.addEventListener('click', () => openDetail(tr.dataset.label));
     });
   } catch (e) {

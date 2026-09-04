@@ -29,8 +29,7 @@
   },
   "rewrites": [
     { "source": "/login", "destination": "/login.html" },
-    { "source": "/batches", "destination": "/batches.html" },
-    { "source": "/salary", "destination": "/salary.html" }
+    { "source": "/batches", "destination": "/batches.html" }
   ],
   "crons": [
     {

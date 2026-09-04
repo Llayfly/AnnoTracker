@@ -102,14 +102,18 @@ function applyFilter() {
   renderTable(list);
 }
 
-// ===== 统计卡 =====
+// ===== 统计卡（点击可立即筛选对应状态）=====
 function renderStats(total) {
   const count = {};
   allBatches.forEach((b) => { count[b.status] = (count[b.status] || 0) + 1; });
-  const card = (label, val, color) =>
-    `<div class="batch-stat-card"><div class="label">${label}</div><div class="value ${color || ''}">${val}</div></div>`;
+  const current = $('filterStatus').value;
+  const card = (label, val, color, statusKey) => {
+    const active = statusKey === undefined ? !current : current === statusKey;
+    return `<div class="batch-stat-card${active ? ' active' : ''}" data-status="${statusKey === undefined ? '' : statusKey}">
+      <div class="label">${label}</div><div class="value ${color || ''}">${val}</div></div>`;
+  };
   let html = card('筛选结果', total);
-  STATUS_ORDER.forEach((s) => { html += card(s, count[s] || 0, statusColor[s]); });
+  STATUS_ORDER.forEach((s) => { html += card(s, count[s] || 0, statusColor[s], s); });
   $('statsBar').innerHTML = html;
 }
 
@@ -312,6 +316,13 @@ async function autoCollect() {
 // ===== 事件绑定 =====
 $('addBatchBtn').addEventListener('click', addBatch);
 $('autoCollectBtn').addEventListener('click', autoCollect);
+$('statsBar').addEventListener('click', (e) => {
+  const el = e.target.closest('.batch-stat-card');
+  if (!el) return;
+  const status = el.dataset.status || '';
+  $('filterStatus').value = status;
+  applyFilter();
+});
 $('filterBtn').addEventListener('click', applyFilter);
 $('clearFilterBtn').addEventListener('click', () => {
   $('filterStatus').value = '';
